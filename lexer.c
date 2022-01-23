@@ -1,7 +1,7 @@
 #include "xcc.h"
 
 
-static const char *token_type_to_string(TokenType type) {
+const char *lex_token_type_to_string(TokenType type) {
     switch(type) {
         case TOK_KEYWORD_INT: return "KEYWORD_INT";
         case TOK_KEYWORD_RETURN: return "KEYWORD_RETURN";
@@ -12,6 +12,7 @@ static const char *token_type_to_string(TokenType type) {
         case TOK_SEMICOLON: return "SEMICOLON";
         case TOK_CLOSE_CURLY: return "CLOSE_CURLY";
         case TOK_INT_LITERAL: return "INT_LITERAL";
+        case TOK_EOF: return "EOF";
         case TOK_UNKNOWN: return "UNKNOWN";
     }
 
@@ -20,7 +21,7 @@ static const char *token_type_to_string(TokenType type) {
 }
 
 void lex_dump_token(Token *token) {
-    fprintf(stderr, "[TOKEN %s `", token_type_to_string(token->type));
+    fprintf(stderr, "[TOKEN %s `", lex_token_type_to_string(token->type));
     fprintf(stderr, "%s", token->contents);
     fprintf(stderr, "` (id=%d, len=%zu, ", (int) token->type, token->contents_length);
     fprintf(stderr, "line=%d, col=%d]", token->source_line_num, token->source_column_num);
@@ -40,6 +41,63 @@ void lex_dump_lexer_state(Lexer *lexer) {
     }
 }
 
+void lex_print_source_with_token_range(Token *start, Token *end) {
+    bool do_colour = isatty(fileno(stderr));
+
+    // TODO: actually use `end`
+    fprintf(
+        stderr, "    At \"%s:%d:%d\": (",
+        start->source_filename, start->source_line_num,
+        start->source_column_num
+    );
+    lex_dump_token(start);
+    fprintf(stderr, ")\n");
+
+    xcc_assert(start->source_column_num + start->source_length < strlen(start->start_of_line));
+
+    fprintf(stderr, "    | ");
+    for(int i = 0; i < start->source_column_num - 1; ++i) {
+        fprintf(stderr, "%c", start->start_of_line[i]);
+    }
+    if(do_colour) {
+        fprintf(stderr, "\033[31;1m");
+    }
+    for(int i = 0; i < start->source_length; ++i) {
+        fprintf(
+            stderr, "%c", start->start_of_line[i + start->source_column_num - 1]
+        );
+    }
+    if(do_colour) {
+        fprintf(stderr, "\033[0m");
+    }
+    for(int i = start->source_column_num - 1 + start->source_length; true; ++i) {
+        char c = start->start_of_line[i];
+        if(c == '\n' || c == '\0') {
+            break;
+        }
+        fprintf(
+            stderr, "%c", c
+        );
+    }
+    fprintf(stderr, "\n");
+
+    fprintf(stderr, "      ");
+    for(int i = 0; i < start->source_column_num - 1; ++i) {
+        fprintf(stderr, " ");
+    }
+    if(do_colour) {
+        fprintf(stderr, "\033[31;1m");
+    }
+    for(int i = 0; i < start->source_length; ++i) {
+        char c = i ? '~' : '^';
+        fprintf(stderr, "%c", c);
+    }
+    if(do_colour) {
+        fprintf(stderr, "\033[0m");
+    }
+    fprintf(stderr, "\n");
+}
+
 static Token *append_empty_token(Lexer *lexer) {
     Token *new_token;
     LIST_STRUCT_APPEND_FUNC(
@@ -50,7 +108,7 @@ static Token *append_empty_token(Lexer *lexer) {
 }
 
 static void advance_one_char(Lexer *lexer) {
-    if(lexer->index == lexer->source_length) {
+    if(lexer->index >= lexer->source_length) {
         xcc_assert_not_reached_msg("Lexer advancing past \\0");
     }
 
@@ -59,6 +117,7 @@ static void advance_one_char(Lexer *lexer) {
 
     if(c == '\n') {
         ++lexer->current_line_num;
+        lexer->current_start_of_line_char = &lexer->source[lexer->index];
         lexer->current_col_num = 1;
     } else {
         ++lexer->current_col_num;
@@ -71,8 +130,11 @@ static Token *accept_token(Lexer *lexer, TokenType type, int tok_length) {
     char *new_contents = xcc_malloc(tok_length + 1);
     new_token->contents = new_contents;
     new_token->contents_length = tok_length;
+    new_token->source_length = tok_length;
     new_token->source_column_num = lexer->current_col_num;
     new_token->source_line_num = lexer->current_line_num;
+    new_token->start_of_line = lexer->current_start_of_line_char;
+    new_token->source_filename = lexer->source_filename;
     new_token->type = type;
 
     for(int i = 0; i < tok_length; ++i) {
@@ -95,6 +157,7 @@ void lex_free_lexer(Lexer *lexer) {
     if(lexer->tokens) xcc_free(lexer->tokens);
 
     xcc_free(lexer->source);
+    xcc_free(lexer->source_filename);
 
     xcc_free(lexer);
 }
@@ -189,7 +252,7 @@ static void lex_a_token(Lexer *lexer) {
     xcc_assert_not_reached();
 }
 
-static Lexer *lex_source(const char *source) {
+static Lexer *lex_source(const char *source, const char *filename) {
     // Takes ownership of source
     Lexer *lexer = xcc_malloc(sizeof(Lexer));
 
@@ -199,6 +262,11 @@ static Lexer *lex_source(const char *source) {
 
     lexer->current_col_num = 1;
     lexer->current_line_num = 1;
+    lexer->current_start_of_line_char = lexer->source;
+
+    char *source_filename_buf = xcc_malloc(strlen(filename) + 1); // TODO: xcc_strdup
+    strcpy(source_filename_buf, filename);
+    lexer->source_filename = source_filename_buf;
 
     lexer->num_tokens = 0;
     lexer->num_tokens_allocated = 0;
@@ -207,6 +275,7 @@ static Lexer *lex_source(const char *source) {
     while(lexer->index != lexer->source_length) {
         lex_a_token(lexer);
     }
+    accept_token(lexer, TOK_EOF, 0);
 
     return lexer;
 }
@@ -223,6 +292,7 @@ static const char *read_file(FILE *stream) {
             xcc_assert_msg(!ferror(stream), "error reading file");
             break;
         }
+        xcc_assert_msg(c, "null character in file");
 
         if(source_length + 1 >= buf_length) {
             size_t new_buf_length = buf_length * 2;
@@ -244,8 +314,8 @@ static const char *read_file(FILE *stream) {
     return buf;
 }
 
-Lexer *lex_file(FILE *stream) {
+Lexer *lex_file(FILE *stream, const char *filename) {
     const char *source = read_file(stream);
 
-    return lex_source(source);
+    return lex_source(source, filename);
 }

@@ -3,7 +3,7 @@
 
 static int number_xcc_allocations = 0;
 
-__attribute__((__noreturn__)) void
+NORETURN void
 xcc_assert_error_internal(const char *msg, int compiler_line_num,
                           const char* compiler_file_name,
                           const char *compiler_func_name) {
@@ -23,11 +23,11 @@ xcc_assert_error_internal(const char *msg, int compiler_line_num,
 }
 
 void *xcc_malloc(size_t size) {
-    ++number_xcc_allocations;
-
     if(size == 0) {
         return NULL;
     }
+
+    ++number_xcc_allocations;
 
     void *result = malloc(size);
     xcc_assert_msg(result, "malloc() returned NULL");
@@ -35,29 +35,66 @@ void *xcc_malloc(size_t size) {
 }
 
 void xcc_free(const void *p) {
+    if(!p) return;
+
     if(number_xcc_allocations < 1) {
-        xcc_assert_msg(false, "double free?");
+        if(!getenv("RUNNING_IN_VALGRIND")) {
+            xcc_assert_msg(false, "double free?");
+        }
     }
     --number_xcc_allocations;
 
-    if(p) {
-        free((void *) p);
-    }
+    free((void *) p);
 }
 
+static bool has_begun_prog_error = false;
+static const char *current_compiling_stage_error_msg = NULL;
+
+void xcc_set_prog_error_stage(const char *stage) {
+    current_compiling_stage_error_msg = stage;
+}
+
+void begin_prog_error_range(const char *msg, Token *start_token, Token *end_token) {
+    const char *stage = current_compiling_stage_error_msg ? current_compiling_stage_error_msg : "Program";
+    if(msg) {
+        fprintf( stderr, "%s error: %s:\n", stage, msg);
+    } else {
+        fprintf( stderr, "%s error!\n", stage);
+    }
+
+    lex_print_source_with_token_range(start_token, end_token);
+    has_begun_prog_error = true;
+}
+
+NORETURN void end_prog_error() {
+    xcc_assert_msg(has_begun_prog_error, "end_prog_error error without begin");
+    fprintf(stderr, " === end program error ===\n");
+    abort();
+}
+
+
 int main(int argc, char **argv) {
-    FILE *stream = fopen("test.c", "r");
+    const char *filename = "test.c";
+
+    FILE *stream = fopen(filename, "r");
     if(!stream) {
         perror("open()");
         return 1;
     }
 
-    Lexer *lexer = lex_file(stream);
+    Lexer *lexer = lex_file(stream, filename);
     if(fclose(stream)) {
         perror("close()");
         return 1;
     }
 
     lex_dump_lexer_state(lexer);
+
+    AST *program_ast = parse_program(lexer);
+    ast_dump(program_ast);
+    ast_free(program_ast);
+
     lex_free_lexer(lexer);
+    xcc_assert(!has_begun_prog_error);
+    xcc_assert_msg(number_xcc_allocations == 0, "Memory leak!");
 }

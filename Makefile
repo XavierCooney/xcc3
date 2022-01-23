@@ -1,4 +1,4 @@
-parts = xcc lexer
+parts = xcc lexer ast parser
 
 object_files = $(addsuffix .o,$(addprefix build/,$(parts)))
 source_files = $(addsuffix .c,$(parts))
@@ -18,7 +18,7 @@ debug: xcc
 
 .PHONY: find_leak
 find_leak: xcc
-	valgrind --leak-check=full \
+	RUNNING_IN_VALGRIND=y valgrind --leak-check=full \
          --show-leak-kinds=all \
          --track-origins=yes \
 		 ./xcc test.c -o out.S -v
