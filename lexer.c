@@ -54,7 +54,7 @@ void lex_print_source_with_token_range(Token *start, Token *end) {
     lex_dump_token(start);
     fprintf(stderr, ")\n");
 
-    xcc_assert(start->source_column_num + start->source_length < strlen(start->start_of_line));
+    xcc_assert(start->source_column_num - 1 + start->source_length <= strlen(start->start_of_line));
 
     fprintf(stderr, "    | ");
     for(int i = 0; i < start->source_column_num - 1; ++i) {

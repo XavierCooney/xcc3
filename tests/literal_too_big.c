@@ -1,5 +1,5 @@
 // TODO: this should be INT_MAX, but types are needed first
-// @xcc_msg: out of range integer literal
+// @xcc_msg: integer literal out of range
 // @compile_error!
 
 int main() {

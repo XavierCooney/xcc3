@@ -76,30 +76,86 @@ NORETURN void end_prog_error() {
     abort();
 }
 
+static bool is_verbose = false;
+bool xcc_verbose() {
+    return is_verbose;
+}
+
 
 int main(int argc, char **argv) {
-    const char *filename = "test.c";
+    const char *filename_in = NULL;
+    const char *filename_out = NULL;
 
-    FILE *stream = fopen(filename, "r");
-    if(!stream) {
-        perror("open()");
+    for(int i = 1; i < argc; ++i) {
+        if(!strcmp(argv[i], "-o")) {
+            if(i + 1 >= argc) {
+                fprintf(stderr, "No output specified after `-o`\n");
+                return 1;
+            } else if(filename_out) {
+                fprintf(stderr, "Two output files specified!");
+                return 1;
+            } else {
+                filename_out = argv[i + 1];
+                ++i;
+            }
+        } else if(!strcmp(argv[i], "-v")) {
+            is_verbose = true;
+        } else if(argv[i][0] != '-') {
+            if(filename_in) {
+                fprintf(stderr, "Two input files specified!");
+                return 1;
+            } else {
+                filename_in = argv[i];
+            }
+        } else {
+            fprintf(stderr, "Unknown argument `%s`\n", argv[i]);
+            return 1;
+        }
+    }
+
+    if(!filename_in) {
+        fprintf(stderr, "No input file specified\n");
         return 1;
     }
 
-    Lexer *lexer = lex_file(stream, filename);
-    if(fclose(stream)) {
-        perror("close()");
+    if(!filename_out) {
+        fprintf(stderr, "No output file specified\n");
         return 1;
     }
 
-    lex_dump_lexer_state(lexer);
+    FILE *input_stream = fopen(filename_in, "r");
+    if(!input_stream) {
+        perror("open(input_stream)");
+        return 1;
+    }
+
+    Lexer *lexer = lex_file(input_stream, filename_in);
+    if(fclose(input_stream)) {
+        perror("close(input_stream)");
+        return 1;
+    }
+
+    if(xcc_verbose()) lex_dump_lexer_state(lexer);
     AST *program_ast = parse_program(lexer);
-    ast_dump(program_ast);
-    generate_x64(program_ast, filename);
+    if(xcc_verbose()) ast_dump(program_ast);
+
+    FILE *output_stream = fopen(filename_out, "w");
+    if(!output_stream) {
+        perror("open(output_stream)");
+        return 1;
+    }
+
+    generate_set_output(output_stream);
+    generate_x64(program_ast, filename_in);
+
+    if(fclose(output_stream)) {
+        perror("close(output_stream)");
+        return 1;
+    }
 
     ast_free(program_ast);
-
     lex_free_lexer(lexer);
+
     xcc_assert(!has_begun_prog_error);
     xcc_assert_msg(number_xcc_allocations == 0, "Memory leak!");
 }

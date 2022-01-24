@@ -1,10 +1,12 @@
 #include "xcc.h"
 
-#define OUT_STREAM stdout
 
 // TODO: make this not use global variables
 
-bool has_begun_current_line = false;
+static FILE *output_stream = NULL;
+static bool has_begun_current_line = false;
+
+#define OUT_STREAM output_stream
 
 static void possibly_generate_indent() {
     if(!has_begun_current_line) {
@@ -33,7 +35,13 @@ void generate_asm_integer(long long val) {
     fprintf(OUT_STREAM, "%lld", val);
 }
 
+void generate_set_output(FILE *stream) {
+    output_stream = stream;
+}
+
 void generate_asm(const char *line) {
+    xcc_assert(output_stream);
+
     possibly_generate_indent();
     fprintf(OUT_STREAM, "%s", line);
     generate_end_of_line();

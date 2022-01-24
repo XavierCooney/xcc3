@@ -9,7 +9,7 @@ cflags = -fsanitize=undefined -Wall -Werror -ggdb -Wno-format-zero-length
 all: xcc
 
 build/assembly.S: xcc test.c
-	./xcc < test.c > build/assembly.S
+	./xcc test.c -v -o build/assembly.S
 
 build/test_out: build/assembly.S
 	gcc build/assembly.S -o build/test_out -no-pie
@@ -17,6 +17,10 @@ build/test_out: build/assembly.S
 .PHONY: run
 run: build/test_out
 	./build/test_out
+
+.PHONY: test
+test: xcc
+	python3 tester.py
 
 .PHONY: debug
 debug: xcc

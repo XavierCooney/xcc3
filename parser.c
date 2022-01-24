@@ -25,10 +25,10 @@ static Token *advance(Parser *parser) {
     return token;
 }
 
-// static Token *prev_token(Parser *parser) {
-//     xcc_assert(parser->current_token > 0);
-//     return &parser->lexer->tokens[parser->current_token - 1];
-// }
+static Token *prev_token(Parser *parser) {
+    xcc_assert(parser->current_token > 0);
+    return &parser->lexer->tokens[parser->current_token - 1];
+}
 
 static Token *accept(Parser *parser, TokenType token_type) {
     Token *current = current_token(parser);
@@ -70,7 +70,7 @@ static long long parse_integer_literal_value(Token *token) {
     long long val = strtoll(token->contents, NULL, 10);
 
     if(errno == ERANGE) {
-        prog_error("Integer literal out of range", token);
+        prog_error("integer literal out of range", token);
     }
 
     return val;
@@ -84,7 +84,7 @@ static AST *parse_expression(Parser *parser) {
         literal_ast->integer_literal_val = parse_integer_literal_value(first_token);
         return literal_ast;
     } else {
-        parse_error(parser, "Need expression");
+        parse_error(parser, "need expression");
     }
 }
 
@@ -96,7 +96,7 @@ static AST *parse_statement(Parser *parser) {
         expect(parser, TOK_SEMICOLON);
         return return_ast;
     } else {
-        parse_error(parser, "Need statement");
+        parse_error(parser, "need statement");
     }
 }
 
@@ -124,9 +124,15 @@ static AST *parse_function(Parser *parser) {
     expect(parser, TOK_OPEN_PAREN);
     expect(parser, TOK_CLOSE_PAREN);
 
-    ast_append(
-        func_ast, parse_block(parser)
-    );
+    AST *block_ast = parse_block(parser);
+    ast_append(func_ast, block_ast);
+
+    if(!strcmp(func_name_token->contents, "main")) {
+        // main() has implicit return 0
+        AST *return_stmt = ast_append_new(block_ast, AST_RETURN_STMT, prev_token(parser));
+        AST *literal_0 = ast_append_new(return_stmt, AST_INTEGER_LITERAL, prev_token(parser));
+        literal_0->integer_literal_val = 0;
+    }
 
     return func_ast;
 }
