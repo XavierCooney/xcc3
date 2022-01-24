@@ -116,5 +116,6 @@ void ast_dump(AST *ast) {
     int *num_children_per_node = xcc_malloc(sizeof(int) * (MAX_AST_DEBUG_LENGTH + 1));
     bool needs_spacer = false;
     ast_debug_internal(false, ast, 0, num_children_per_node, &needs_spacer);
+    fprintf(stderr, "\n");
     xcc_free(num_children_per_node);
 }

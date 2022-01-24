@@ -39,6 +39,7 @@ void lex_dump_lexer_state(Lexer *lexer) {
         lex_dump_token(&lexer->tokens[i]);
         fprintf(stderr, "\n");
     }
+    fprintf(stderr, "\n");
 }
 
 void lex_print_source_with_token_range(Token *start, Token *end) {

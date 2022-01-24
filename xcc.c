@@ -50,6 +50,10 @@ void xcc_free(const void *p) {
 static bool has_begun_prog_error = false;
 static const char *current_compiling_stage_error_msg = NULL;
 
+const char *xcc_get_prog_error_stage() {
+    return current_compiling_stage_error_msg;;
+}
+
 void xcc_set_prog_error_stage(const char *stage) {
     current_compiling_stage_error_msg = stage;
 }
@@ -89,9 +93,10 @@ int main(int argc, char **argv) {
     }
 
     lex_dump_lexer_state(lexer);
-
     AST *program_ast = parse_program(lexer);
     ast_dump(program_ast);
+    generate_x64(program_ast, filename);
+
     ast_free(program_ast);
 
     lex_free_lexer(lexer);

@@ -12,7 +12,7 @@ static Token *current_token(Parser *parser) {
 NORETURN static void parse_error(Parser *parser, const char *msg) {
     begin_prog_error_range(msg, current_token(parser), current_token(parser));
     fprintf(
-        stderr, "  (current token is %s)",
+        stderr, "  (current token is %s)\n",
         lex_token_type_to_string(current_token(parser)->type)
     );
     end_prog_error();
@@ -50,7 +50,7 @@ static Token *expect(Parser *parser, TokenType token_type) {
     } else {
         begin_prog_error_range(NULL, current_token(parser), current_token(parser));
         fprintf(
-            stderr, "  Expected a %s, but found a %s",
+            stderr, "  Expected a %s, but found a %s\n",
             lex_token_type_to_string(token_type),
             lex_token_type_to_string(current_token(parser)->type)
         );
@@ -147,7 +147,11 @@ AST *parse_program(Lexer *lexer) {
     parser.lexer = lexer;
     parser.current_token = 0;
 
+    const char *old_stage = xcc_get_prog_error_stage();
+    xcc_set_prog_error_stage("Parse");
     AST *program_ast = parse_unit(&parser);
+    xcc_set_prog_error_stage(old_stage);
+
 
     return program_ast;
 }

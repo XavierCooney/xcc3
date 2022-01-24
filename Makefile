@@ -1,4 +1,4 @@
-parts = xcc lexer ast parser
+parts = xcc lexer ast parser generate generate_x64
 
 object_files = $(addsuffix .o,$(addprefix build/,$(parts)))
 source_files = $(addsuffix .c,$(parts))
@@ -8,9 +8,15 @@ cflags = -fsanitize=undefined -Wall -Werror -ggdb -Wno-format-zero-length
 .PHONY: all
 all: xcc
 
+build/assembly.S: xcc test.c
+	./xcc < test.c > build/assembly.S
+
+build/test_out: build/assembly.S
+	gcc build/assembly.S -o build/test_out -no-pie
+
 .PHONY: run
-run: xcc
-	./xcc
+run: build/test_out
+	./build/test_out
 
 .PHONY: debug
 debug: xcc
