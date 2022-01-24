@@ -163,6 +163,22 @@ void lex_free_lexer(Lexer *lexer) {
     xcc_free(lexer);
 }
 
+static bool try_lex_a_comment(Lexer *lexer) {
+    // Check for `//`
+    if(lexer->source[lexer->index] == '/' && lexer->source[lexer->index + 1] == '/') {
+        advance_one_char(lexer);
+        advance_one_char(lexer);
+        while(lexer->source[lexer->index] && lexer->source[lexer->index] != '\n') {
+            advance_one_char(lexer);
+        }
+        if(lexer->source[lexer->index] == '\n') {
+            advance_one_char(lexer); // gobble up the newline because why not?
+        }
+        return true;
+    }
+    return false;
+}
+
 static Token *try_lex_a_char(Lexer *lexer, TokenType type, char c) {
     if(lexer->source[lexer->index] == c) {
         return accept_token(lexer, type, 1);
@@ -243,6 +259,8 @@ static void lex_a_token(Lexer *lexer) {
         match_keyword_token(token, "return", TOK_KEYWORD_RETURN);
         return;
     } else if(try_lex_an_integer(lexer)) {
+        return;
+    } else if(try_lex_a_comment(lexer)) {
         return;
     } else {
         // Just to prevent an infinite loop...
