@@ -27,5 +27,6 @@ bool xcc_verbose();
 #include "xcc_assert.h"
 #include "list.h"
 #include "ast.h"
+#include "value_pos.h"
 #include "parser.h"
 #include "generate.h"

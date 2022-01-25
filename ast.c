@@ -18,10 +18,15 @@ AST *ast_new(ASTType type, Token *token) {
     AST *new_ast = xcc_malloc(sizeof(AST));
 
     new_ast->nodes = NULL;
+    new_ast->pos = NULL;
     new_ast->num_nodes = 0;
     new_ast->num_nodes_allocated = 0;
     new_ast->type = type;
     new_ast->main_token = token;
+
+    if(type == AST_BODY) {
+        new_ast->block_max_stack_depth = -1;
+    }
 
     return new_ast;
 }
@@ -38,6 +43,7 @@ void ast_free(AST *ast) {
         ast_free(ast->nodes[i]);
     }
 
+    if(ast->pos) xcc_free(ast->pos);
     xcc_free(ast->nodes);
     xcc_free(ast);
 }
@@ -51,6 +57,7 @@ const char *ast_node_type_to_str(ASTType type) {
         case AST_BODY: return "BODY";
         case AST_RETURN_STMT: return "RETURN_STMT";
         case AST_INTEGER_LITERAL: return "INTEGER_LITERAL";
+        case AST_ADD: return "ADD";
     }
 
     xcc_assert_not_reached();
@@ -89,6 +96,13 @@ static void ast_debug_internal(bool just_lines, AST *ast, int depth,
         fprintf(stderr, " [%lld]", ast->integer_literal_val);
     } else if(ast->type == AST_FUNCTION) {
         fprintf(stderr, " [%s]", ast->identifier_string);
+    } else if(ast->type == AST_BODY) {
+        fprintf(stderr, " [max depth %i]", ast->block_max_stack_depth);
+    }
+
+    if(ast->pos) {
+        fprintf(stderr, " ");
+        value_pos_dump(ast->pos);
     }
 
     fprintf(stderr, "\n");

@@ -17,6 +17,8 @@ typedef enum {
     TOK_SEMICOLON,
 
     TOK_INT_LITERAL,
+
+    TOK_PLUS
 }  TokenType;
 
 typedef struct {

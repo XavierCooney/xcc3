@@ -1,32 +1,116 @@
 #include "xcc.h"
 
-static void generate_expression(AST *ast) {
+typedef struct {
+    int reserved_stack_space;
+} GenContext;
+
+
+static void generate_asm_pos(ValuePosition *pos) {
+    if(pos->type == POS_STACK) {
+        generate_asm_integer(-pos->stack_offset);
+        generate_asm_partial("(%rbp)"); // TODO: omit frame pointer
+    } else {
+        xcc_assert_not_reached_msg("TODO: generate_asm_pos");
+    }
+}
+
+static const char *move_value_into_reg_temp(ValuePosition *pos) {
+    // TODO: this is super bad
+    if(pos->type == POS_STACK) {
+        generate_asm_partial("movq ");
+        generate_asm_integer(-pos->stack_offset);
+        generate_asm_partial("(%rbp), "); // TODO: omit frame pointer
+        generate_asm("%r11");
+        return "%r11";
+    } else {
+        xcc_assert_not_reached_msg("TODO: generate_asm_pos");
+    }
+}
+
+static void generate_move_to_pos(ValuePosition *a, ValuePosition *b) {
+    // moves value at a into b
+    if(value_pos_is_same(a, b)) return;
+
+    generate_asm_partial("movq ");
+
+    if(a->type != POS_STACK || b->type != POS_STACK) {
+        generate_asm_pos(a);
+        generate_asm_partial(", ");
+        generate_asm_pos(b);
+        generate_asm("");
+    } else {
+        const char *reg_a = move_value_into_reg_temp(a);
+
+        generate_asm_partial("movq ");
+        generate_asm_partial(reg_a);
+        generate_asm_partial(", ");
+        generate_asm_pos(b);
+        generate_asm("");
+    }
+}
+
+static void generate_expression(GenContext *ctx, AST *ast) {
     if(ast->type == AST_INTEGER_LITERAL) {
         generate_asm_partial("movq $");
         generate_asm_integer(ast->integer_literal_val);
-        generate_asm(", %rax");
+        generate_asm_partial(", ");
+        generate_asm_pos(ast->pos);
+        generate_asm("");
+    } else if(ast->type == AST_ADD) {
+        xcc_assert(ast->num_nodes == 2);
+
+        generate_expression(ctx, ast->nodes[0]);
+        generate_expression(ctx, ast->nodes[1]);
+
+        generate_move_to_pos(ast->nodes[0]->pos, ast->pos);
+
+        if(ast->nodes[1]->pos->type == POS_STACK && ast->pos->type == POS_STACK) {
+            const char *reg_b = move_value_into_reg_temp(ast->nodes[1]->pos);
+            generate_asm_partial("addq ");
+            generate_asm_partial(reg_b);
+            generate_asm_partial(", ");
+            generate_asm_pos(ast->pos);
+            generate_asm("");
+        } else {
+            generate_asm_partial("addq ");
+            generate_asm_pos(ast->nodes[1]->pos);
+            generate_asm_partial(", ");
+            generate_asm_pos(ast->pos);
+            generate_asm("");
+        }
     } else {
         xcc_assert_not_reached_msg("unknown expression");
     }
 }
 
-static void generate_statement(AST *ast) {
+static void generate_statement(GenContext *ctx, AST *ast) {
     if(ast->type == AST_RETURN_STMT) {
         xcc_assert(ast->num_nodes == 1);
 
         AST *expression = ast->nodes[0];
-        generate_expression(expression);
+        generate_expression(ctx, expression);
+
+        generate_asm_partial("movq ");
+        generate_asm_pos(expression->pos);
+        generate_asm(", %rax");
+
+        // epilogue
+        generate_asm_partial("addq $");
+        generate_asm_integer(ctx->reserved_stack_space);
+        generate_asm(", %rsp");;
+        generate_asm("popq %rbp");
+
         generate_asm("retq");
     } else {
         xcc_assert_not_reached_msg("unknown statement");
     }
 }
 
-static void generate_body(AST *ast) {
+static void generate_body(GenContext *ctx, AST *ast) {
     xcc_assert(ast->type == AST_BODY);
 
     for(int i = 0; i < ast->num_nodes; ++i) {
-        generate_statement(ast->nodes[i]);
+        generate_statement(ctx, ast->nodes[i]);
     }
 }
 
@@ -43,10 +127,24 @@ static void generate_function(AST *ast) {
     generate_asm_partial(name);
     generate_asm(":");
 
-
     AST *body = ast->nodes[2];
 
-    generate_body(body);
+    int stack_space = body->block_max_stack_depth;
+    xcc_assert(stack_space >= 0);
+
+    if(stack_space > 0) {
+        // TODO: omit-frame-pointer
+        generate_asm("pushq %rbp");
+        generate_asm("movq %rsp, %rbp");
+        generate_asm_partial("subq $");
+        generate_asm_integer(stack_space);
+        generate_asm(", %rsp");
+    }
+
+    GenContext ctx;
+    ctx.reserved_stack_space = stack_space;
+
+    generate_body(&ctx, body);
 }
 
 void generate_x64(AST *ast, const char *filename) {

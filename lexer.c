@@ -12,6 +12,7 @@ const char *lex_token_type_to_string(TokenType type) {
         case TOK_SEMICOLON: return "SEMICOLON";
         case TOK_CLOSE_CURLY: return "CLOSE_CURLY";
         case TOK_INT_LITERAL: return "INT_LITERAL";
+        case TOK_PLUS: return "PLUS";
         case TOK_EOF: return "EOF";
         case TOK_UNKNOWN: return "UNKNOWN";
     }
@@ -250,6 +251,8 @@ static void lex_a_token(Lexer *lexer) {
     } else if(try_lex_a_char(lexer, TOK_CLOSE_CURLY, '}')) {
         return;
     } else if(try_lex_a_char(lexer, TOK_SEMICOLON, ';')) {
+        return;
+    } else if(try_lex_a_char(lexer, TOK_PLUS, '+')) {
         return;
     } else if(current_char_is_whitespace(lexer)) {
         advance_one_char(lexer);

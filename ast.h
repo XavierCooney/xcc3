@@ -4,10 +4,12 @@
 typedef enum {
     AST_PROGRAM, AST_FUNCTION,
     AST_TYPE, AST_FUNC_DECL_PARAM_LIST, AST_BODY,
-    AST_RETURN_STMT, AST_INTEGER_LITERAL
+    AST_RETURN_STMT, AST_INTEGER_LITERAL,
+    AST_ADD
 } ASTType;
 
 struct AST;
+struct ValuePosition;
 typedef struct AST {
     ASTType type;
     Token *main_token;
@@ -16,9 +18,12 @@ typedef struct AST {
     int num_nodes_allocated;
     struct AST **nodes;
 
+    struct ValuePosition *pos;
+
     union {
         long long integer_literal_val;
         const char *identifier_string;
+        int block_max_stack_depth;
     };
 } AST;
 

@@ -76,16 +76,36 @@ static long long parse_integer_literal_value(Token *token) {
     return val;
 }
 
-static AST *parse_expression(Parser *parser) {
-    Token *first_token = current_token(parser);
-
+static AST *parse_primary(Parser *parser) {
     if(accept(parser, TOK_INT_LITERAL)) {
-        AST *literal_ast = ast_new(AST_INTEGER_LITERAL, first_token);
-        literal_ast->integer_literal_val = parse_integer_literal_value(first_token);
+        Token *literal_token = prev_token(parser);
+        AST *literal_ast = ast_new(AST_INTEGER_LITERAL, literal_token);
+        literal_ast->integer_literal_val = parse_integer_literal_value(literal_token);
         return literal_ast;
     } else {
         parse_error(parser, "need expression");
     }
+}
+
+static AST *parse_additive(Parser *parser) {
+    AST *a = parse_primary(parser);
+
+    while(accept(parser, TOK_PLUS)) {
+        Token *token = prev_token(parser);
+
+        AST *b = parse_primary(parser);
+
+        AST *add_ast = ast_new(AST_ADD, token);
+        ast_append(add_ast, a);
+        ast_append(add_ast, b);
+        a = add_ast;
+    }
+
+    return a;
+}
+
+static AST *parse_expression(Parser *parser) {
+    return parse_additive(parser);
 }
 
 static AST *parse_statement(Parser *parser) {

@@ -16,7 +16,7 @@ xcc_assert_error_internal(const char *msg, int compiler_line_num,
     fprintf(
         stderr,
         "    (on compiler line %d in function %s from file %s)\n",
-        compiler_line_num, compiler_file_name, compiler_func_name
+        compiler_line_num, compiler_func_name, compiler_file_name
     );
 
     abort(); // Raise SIGABRT to trigger GDB
@@ -130,13 +130,17 @@ int main(int argc, char **argv) {
     }
 
     Lexer *lexer = lex_file(input_stream, filename_in);
+    if(xcc_verbose()) lex_dump_lexer_state(lexer);
+
     if(fclose(input_stream)) {
         perror("close(input_stream)");
         return 1;
     }
 
-    if(xcc_verbose()) lex_dump_lexer_state(lexer);
     AST *program_ast = parse_program(lexer);
+    if(xcc_verbose()) ast_dump(program_ast);
+
+    value_pos_allocate(program_ast);
     if(xcc_verbose()) ast_dump(program_ast);
 
     FILE *output_stream = fopen(filename_out, "w");
