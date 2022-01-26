@@ -8,7 +8,7 @@ typedef struct {
 
 static bool is_expression_node(AST *ast) {
     ASTType t = ast->type;
-    return t == AST_INTEGER_LITERAL || t == AST_ADD;
+    return t == AST_INTEGER_LITERAL || t == AST_ADD || t == AST_CALL;
 }
 
 static int max(int a, int b) {
@@ -43,6 +43,8 @@ static void allocate_vals_recursive(AST *ast, AllocationStatus *allocation) {
 }
 
 static void allocate_vals_for_func(AST *func) {
+    if(func->type == AST_FUNCTION_PROTOTYPE) return;
+
     xcc_assert(func->type == AST_FUNCTION);
 
     AllocationStatus allocation;

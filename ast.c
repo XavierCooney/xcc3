@@ -27,6 +27,9 @@ AST *ast_new(ASTType type, Token *token) {
     if(type == AST_BODY) {
         new_ast->block_max_stack_depth = -1;
     }
+    if(type == AST_FUNCTION || type == AST_FUNCTION_PROTOTYPE || type == AST_CALL) {
+        new_ast->function_res = NULL;
+    }
 
     return new_ast;
 }
@@ -52,12 +55,16 @@ const char *ast_node_type_to_str(ASTType type) {
     switch(type) {
         case AST_PROGRAM: return "PROGRAM";
         case AST_FUNCTION: return "FUNCTION";
+        case AST_FUNCTION_PROTOTYPE: return "FUNCTION_PROTOTYPE";
+        case AST_PARAMETER: return "PARAMETER";
         case AST_TYPE: return "TYPE";
         case AST_FUNC_DECL_PARAM_LIST: return "FUNC_DECL_PARAM_LIST";
         case AST_BODY: return "BODY";
         case AST_RETURN_STMT: return "RETURN_STMT";
         case AST_INTEGER_LITERAL: return "INTEGER_LITERAL";
         case AST_ADD: return "ADD";
+        case AST_CALL: return "CALL";
+        case AST_STATEMENT_EXPRESSION: return "STATEMENT_EXPRESSION";
     }
 
     xcc_assert_not_reached();
@@ -96,6 +103,12 @@ static void ast_debug_internal(bool just_lines, AST *ast, int depth,
         fprintf(stderr, " [%lld]", ast->integer_literal_val);
     } else if(ast->type == AST_FUNCTION) {
         fprintf(stderr, " [%s]", ast->identifier_string);
+    } else if(ast->type == AST_FUNCTION_PROTOTYPE) {
+        fprintf(stderr, " [%s]", ast->identifier_string);
+    } else if(ast->type == AST_PARAMETER) {
+        fprintf(stderr, " [%s]", ast->identifier_string);
+    } else if(ast->type == AST_CALL) {
+        fprintf(stderr, " [%s]", ast->identifier_string);
     } else if(ast->type == AST_BODY) {
         fprintf(stderr, " [max depth %i]", ast->block_max_stack_depth);
     }
@@ -132,4 +145,9 @@ void ast_dump(AST *ast) {
     ast_debug_internal(false, ast, 0, num_children_per_node, &needs_spacer);
     fprintf(stderr, "\n");
     xcc_free(num_children_per_node);
+}
+
+void prog_error_ast(const char *msg, AST *ast) {
+    // TODO: do a token range
+    prog_error(msg, ast->main_token);
 }

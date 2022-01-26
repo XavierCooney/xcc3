@@ -10,6 +10,7 @@ const char *lex_token_type_to_string(TokenType type) {
         case TOK_CLOSE_PAREN: return "CLOSE_PAREN";
         case TOK_OPEN_CURLY: return "OPEN_CURLY";
         case TOK_SEMICOLON: return "SEMICOLON";
+        case TOK_COMMA: return "COMMA";
         case TOK_CLOSE_CURLY: return "CLOSE_CURLY";
         case TOK_INT_LITERAL: return "INT_LITERAL";
         case TOK_PLUS: return "PLUS";
@@ -191,7 +192,7 @@ static Token *try_lex_a_char(Lexer *lexer, TokenType type, char c) {
 static bool char_can_be_in_ident(char c, int index) {
     bool condition = ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || c == '_';
     if(index > 0) {
-        condition = condition || ('0' <= c && c <= '0');
+        condition = condition || ('0' <= c && c <= '9');
     }
     return condition;
 }
@@ -251,6 +252,8 @@ static void lex_a_token(Lexer *lexer) {
     } else if(try_lex_a_char(lexer, TOK_CLOSE_CURLY, '}')) {
         return;
     } else if(try_lex_a_char(lexer, TOK_SEMICOLON, ';')) {
+        return;
+    } else if(try_lex_a_char(lexer, TOK_COMMA, ',')) {
         return;
     } else if(try_lex_a_char(lexer, TOK_PLUS, '+')) {
         return;

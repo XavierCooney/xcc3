@@ -1,4 +1,4 @@
-parts = xcc lexer ast parser value_pos generate generate_x64
+parts = xcc lexer ast parser resolve value_pos generate generate_x64
 
 object_files = $(addsuffix .o,$(addprefix build/,$(parts)))
 source_files = $(addsuffix .c,$(parts))
@@ -13,7 +13,7 @@ build/assembly.S: xcc test.c
 	./xcc test.c -v -o build/assembly.S
 
 build/test_out: build/assembly.S
-	gcc build/assembly.S -o build/test_out -no-pie
+	gcc supplement.c build/assembly.S -o build/test_out -no-pie
 
 .PHONY: run
 run: build/test_out
@@ -25,7 +25,7 @@ test: xcc
 
 .PHONY: debug
 debug: xcc
-	gdb ./xcc
+	gdb --args ./xcc test.c -v -o build/assembly.S
 
 .PHONY: find_leak
 find_leak: xcc

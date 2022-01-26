@@ -29,4 +29,5 @@ bool xcc_verbose();
 #include "ast.h"
 #include "value_pos.h"
 #include "parser.h"
+#include "resolve.h"
 #include "generate.h"

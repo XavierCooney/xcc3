@@ -78,6 +78,44 @@ static void generate_expression(GenContext *ctx, AST *ast) {
             generate_asm_pos(ast->pos);
             generate_asm("");
         }
+    } else if(ast->type == AST_CALL) {
+        FunctionResolution *res = ast->function_res;
+        xcc_assert(res);
+
+        xcc_assert(res->num_arguments == ast->num_nodes);
+        for(int i = 0; i < res->num_arguments; ++i) {
+            AST *argument_ast = ast->nodes[i];
+
+            generate_expression(ctx, argument_ast);
+
+            const char *reg_name = NULL;
+
+            if(i == 0) {
+                reg_name = "%rdi";
+            } else if(i == 1) {
+                reg_name = "%rsi";
+            } else if(i == 2) {
+                reg_name = "%rdx";
+            } else if(i == 3) {
+                reg_name = "%rcx";
+            } else if(i == 4) {
+                reg_name = "%r8";
+            } else if(i == 5) {
+                reg_name = "%r9";
+            } else {
+                xcc_assert_not_reached_msg("TODO: implement case for more than 6 args");
+            }
+
+            xcc_assert(reg_name);
+
+            generate_asm_partial("movq ");
+            generate_asm_pos(argument_ast->pos);
+            generate_asm_partial(", ");
+            generate_asm(reg_name);
+        }
+
+        generate_asm_partial("call ");
+        generate_asm(res->name);
     } else {
         xcc_assert_not_reached_msg("unknown expression");
     }
@@ -97,10 +135,13 @@ static void generate_statement(GenContext *ctx, AST *ast) {
         // epilogue
         generate_asm_partial("addq $");
         generate_asm_integer(ctx->reserved_stack_space);
-        generate_asm(", %rsp");;
+        generate_asm(", %rsp");
         generate_asm("popq %rbp");
 
         generate_asm("retq");
+    } else if(ast->type == AST_STATEMENT_EXPRESSION) {
+        xcc_assert(ast->num_nodes == 1);
+        generate_expression(ctx, ast->nodes[0]);
     } else {
         xcc_assert_not_reached_msg("unknown statement");
     }
@@ -159,6 +200,8 @@ void generate_x64(AST *ast, const char *filename) {
     generate_asm(".align 4");
 
     for(int i = 0; i < ast->num_nodes; ++i) {
+        if(ast->nodes[i]->type == AST_FUNCTION_PROTOTYPE) continue;
+
         generate_function(ast->nodes[i]);
     }
 }
