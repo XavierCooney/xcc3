@@ -88,6 +88,9 @@ def run_test(test_file_name):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE
         )
+
+        decoded_stdout = captured_output.stdout.decode('utf-8')
+
         for expected_return_code in get_param_values('rc'):
             if str(captured_output.returncode) != expected_return_code:
                 return (
@@ -95,6 +98,22 @@ def run_test(test_file_name):
                     f'unexpected return code ({captured_output.returncode}) on execution'
                     f' (epected {expected_return_code})',
                 )
+
+        if captured_output.stderr:
+            return (
+                FAILURE,
+                f'Execution produced stderr',
+                captured_output
+            )
+
+        for expected_run_output in get_param_values('run_output'):
+            if expected_run_output not in decoded_stdout:
+                return (
+                    FAILURE,
+                    f"Executable output doesn't have: `{expected_run_output}`",
+                    captured_output
+                )
+
 
     # check that all flags provided were actually checked (prevent mispellings)
     found_flags = re.findall(r'@[a-z_]+[!:]', source)

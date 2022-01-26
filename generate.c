@@ -2,7 +2,6 @@
 
 
 // TODO: make this not use global variables
-
 static FILE *output_stream = NULL;
 static bool has_begun_current_line = false;
 

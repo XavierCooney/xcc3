@@ -160,6 +160,7 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    value_pos_free_preallocated();
     resolve_free(resolutions);
     ast_free(program_ast);
     lex_free_lexer(lexer);

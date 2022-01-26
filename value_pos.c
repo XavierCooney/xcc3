@@ -74,6 +74,29 @@ bool value_pos_is_same(ValuePosition *a, ValuePosition *b) {
     }
 }
 
+static ValuePosition *preallocated_positions = NULL;
+
+ValuePosition *value_pos_reg(RegLoc location) {
+    if(preallocated_positions == NULL) {
+        preallocated_positions = xcc_malloc(sizeof(ValuePosition) * REG_LAST);
+
+        for(int i = 0; i < REG_LAST; ++i) {
+            ValuePosition *pos = &preallocated_positions[i];
+            pos->type = POS_REG;
+            pos->register_num = i;
+        }
+    }
+
+    xcc_assert(location < REG_LAST);
+    return &preallocated_positions[location];
+}
+
+void value_pos_free_preallocated() {
+    if(preallocated_positions) {
+        xcc_free(preallocated_positions);
+    }
+}
+
 void value_pos_dump(ValuePosition *value_pos) {
     fprintf(stderr, "[POS ");
 
