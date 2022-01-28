@@ -16,6 +16,7 @@ typedef enum {
     TOK_CLOSE_CURLY,
     TOK_SEMICOLON,
     TOK_COMMA,
+    TOK_EQUALS,
 
     TOK_INT_LITERAL,
 

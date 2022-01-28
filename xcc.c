@@ -138,13 +138,13 @@ int main(int argc, char **argv) {
     }
 
     AST *program_ast = parse_program(lexer);
-    if(xcc_verbose()) ast_dump(program_ast);
+    if(xcc_verbose()) ast_dump(program_ast, "parsed");
 
     Resolutions *resolutions = resolve(program_ast);
-    if(xcc_verbose()) ast_dump(program_ast);
+    if(xcc_verbose()) ast_dump(program_ast, "resolved");
 
     value_pos_allocate(program_ast);
-    if(xcc_verbose()) ast_dump(program_ast);
+    if(xcc_verbose()) ast_dump(program_ast, "allocated");
 
     FILE *output_stream = fopen(filename_out, "w");
     if(!output_stream) {

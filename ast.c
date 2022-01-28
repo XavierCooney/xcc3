@@ -23,6 +23,7 @@ AST *ast_new(ASTType type, Token *token) {
     new_ast->num_nodes_allocated = 0;
     new_ast->type = type;
     new_ast->main_token = token;
+    new_ast->unknown_resolution = NULL;
 
     if(type == AST_BODY) {
         new_ast->block_max_stack_depth = -1;
@@ -38,6 +39,10 @@ AST *ast_append_new(AST *parent, ASTType type, Token *token) {
     AST *new_ast = ast_new(type, token);
     ast_append(parent, new_ast);
     return new_ast;
+}
+
+bool ast_is_block(AST *ast) {
+    return ast->type == AST_BODY;
 }
 
 void ast_free(AST *ast) {
@@ -65,6 +70,9 @@ const char *ast_node_type_to_str(ASTType type) {
         case AST_ADD: return "ADD";
         case AST_CALL: return "CALL";
         case AST_STATEMENT_EXPRESSION: return "STATEMENT_EXPRESSION";
+        case AST_VAR_ASSIGN: return "VAR_ASSIGN";
+        case AST_VAR_DECLARE: return "VAR_DECLARE";
+        case AST_VAR_USE: return "VAR_USE";
     }
 
     xcc_assert_not_reached();
@@ -109,6 +117,10 @@ static void ast_debug_internal(bool just_lines, AST *ast, int depth,
         fprintf(stderr, " [%s]", ast->identifier_string);
     } else if(ast->type == AST_CALL) {
         fprintf(stderr, " [%s]", ast->identifier_string);
+    } else if(ast->type == AST_VAR_DECLARE) {
+        fprintf(stderr, " [%s] [resolution %p]", ast->identifier_string, ast->var_res);
+    } else if(ast->type == AST_VAR_USE) {
+        fprintf(stderr, " [%s] [resolution %p]", ast->identifier_string, ast->var_res);
     } else if(ast->type == AST_BODY) {
         fprintf(stderr, " [max depth %i]", ast->block_max_stack_depth);
     }
@@ -138,8 +150,8 @@ static void ast_debug_internal(bool just_lines, AST *ast, int depth,
     }
 }
 
-void ast_dump(AST *ast) {
-    fprintf(stderr, " AST:\n");
+void ast_dump(AST *ast, const char *header) {
+    fprintf(stderr, " AST, %s:\n", header);
     int *num_children_per_node = xcc_malloc(sizeof(int) * (MAX_AST_DEBUG_LENGTH + 1));
     bool needs_spacer = false;
     ast_debug_internal(false, ast, 0, num_children_per_node, &needs_spacer);

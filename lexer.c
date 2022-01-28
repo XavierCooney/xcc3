@@ -10,6 +10,7 @@ const char *lex_token_type_to_string(TokenType type) {
         case TOK_CLOSE_PAREN: return "CLOSE_PAREN";
         case TOK_OPEN_CURLY: return "OPEN_CURLY";
         case TOK_SEMICOLON: return "SEMICOLON";
+        case TOK_EQUALS: return "EQUALS";
         case TOK_COMMA: return "COMMA";
         case TOK_CLOSE_CURLY: return "CLOSE_CURLY";
         case TOK_INT_LITERAL: return "INT_LITERAL";
@@ -256,6 +257,8 @@ static void lex_a_token(Lexer *lexer) {
     } else if(try_lex_a_char(lexer, TOK_COMMA, ',')) {
         return;
     } else if(try_lex_a_char(lexer, TOK_PLUS, '+')) {
+        return;
+    } else if(try_lex_a_char(lexer, TOK_EQUALS, '=')) {
         return;
     } else if(current_char_is_whitespace(lexer)) {
         advance_one_char(lexer);

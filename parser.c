@@ -59,10 +59,21 @@ static Token *expect(Parser *parser, TokenType token_type) {
     xcc_assert_not_reached()
 }
 
-static AST *parse_type(Parser *parser) {
-    AST *type_ast = ast_new(AST_TYPE, current_token(parser));
-    expect(parser, TOK_KEYWORD_INT);
-    return type_ast;
+static AST *accept_type(Parser *parser) {
+    // *** returns NULL if no type is accepted ***
+    if(accept(parser, TOK_KEYWORD_INT)) {
+        AST *type_ast = ast_new(AST_TYPE, prev_token(parser));
+        return type_ast;
+    }
+
+    return NULL;
+}
+
+static AST *expect_type(Parser *parser) {
+    AST *type = accept_type(parser);
+    if(type) return type;
+
+    parse_error(parser, "expected type");
 }
 
 static long long parse_integer_literal_value(Token *token) {
@@ -100,7 +111,9 @@ static AST *parse_primary(Parser *parser) {
 
             return ast_call;
         } else {
-            xcc_assert_not_reached_msg("TODO: variables");
+            AST *var_usage_ast = ast_new(AST_VAR_USE, ident_token);
+            var_usage_ast->identifier_string = ident_token->contents;
+            return var_usage_ast;
         }
     } else {
         parse_error(parser, "need expression");
@@ -130,11 +143,28 @@ static AST *parse_expression(Parser *parser) {
 
 static AST *parse_statement(Parser *parser) {
     Token *first_token = current_token(parser);
+    AST *ast_type;
+
     if(accept(parser, TOK_KEYWORD_RETURN)) {
         AST *return_ast = ast_new(AST_RETURN_STMT, first_token);
         ast_append(return_ast, parse_expression(parser));
         expect(parser, TOK_SEMICOLON);
         return return_ast;
+    } else if((ast_type = accept_type(parser))) {
+        Token *var_name_token = expect(parser, TOK_IDENTIFIER);
+        const char *var_name = var_name_token->contents;
+
+        AST *var_declare_ast = ast_new(AST_VAR_DECLARE, var_name_token);
+        var_declare_ast->identifier_string = var_name;
+        ast_append(var_declare_ast, ast_type);
+
+        if(accept(parser, TOK_EQUALS)) {
+            AST *initialiser = parse_expression(parser);
+            ast_append(var_declare_ast, initialiser);
+        }
+        expect(parser, TOK_SEMICOLON);
+
+        return var_declare_ast;
     } else {
         AST *expression_ast = parse_expression(parser);
         AST *statement_ast = ast_new(AST_STATEMENT_EXPRESSION, expression_ast->main_token);
@@ -157,7 +187,7 @@ static AST *parse_block(Parser *parser) {
 }
 
 static AST *parse_function(Parser *parser) {
-    AST *return_type_ast = parse_type(parser);
+    AST *return_type_ast = expect_type(parser);
 
     Token *func_name_token = expect(parser, TOK_IDENTIFIER);
 
@@ -165,7 +195,7 @@ static AST *parse_function(Parser *parser) {
     expect(parser, TOK_OPEN_PAREN);
 
     while(!accept(parser, TOK_CLOSE_PAREN)) {
-        AST *param_type = parse_type(parser);
+        AST *param_type = expect_type(parser);
         Token *param_name_token = accept(parser, TOK_IDENTIFIER);
         AST *param = ast_new(AST_PARAMETER, param_name_token);
         param->identifier_string = param_name_token->contents;

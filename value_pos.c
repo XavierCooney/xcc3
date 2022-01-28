@@ -2,13 +2,14 @@
 
 
 typedef struct {
-    int depth;
+    int temporary_depth;
+    int local_var_depth;
     int max_depth;
 } AllocationStatus;
 
 static bool is_expression_node(AST *ast) {
     ASTType t = ast->type;
-    return t == AST_INTEGER_LITERAL || t == AST_ADD || t == AST_CALL;
+    return t == AST_INTEGER_LITERAL || t == AST_ADD || t == AST_CALL || t == AST_VAR_USE;
 }
 
 static int max(int a, int b) {
@@ -16,30 +17,46 @@ static int max(int a, int b) {
     return (a > b) ? a : b;
 }
 
-static void allocate_vals_recursive(AST *ast, AllocationStatus *allocation) {
-    int offset_amt = 0;
+#define TOTAL_DEPTH(allocation) ((allocation)->temporary_depth + (allocation)->local_var_depth)
 
-    int old_depth = allocation->depth;
+static void allocate_vals_recursive(AST *ast, AllocationStatus *allocation) {
+    int old_temporary_depth = allocation->temporary_depth;
+    int old_local_var_depth = allocation->local_var_depth;
 
     for(int i = 0; i < ast->num_nodes; ++i) {
         allocate_vals_recursive(ast->nodes[i], allocation);
     }
 
-    allocation->depth = old_depth; // TODO: account for non-temporaries
+    allocation->temporary_depth = old_temporary_depth; // TODO: account for non-temporaries
 
-    if(is_expression_node(ast)) {
+    if(ast_is_block(ast)) {
+        allocation->local_var_depth = old_local_var_depth;
+        ast->block_max_stack_depth = allocation->max_depth;
+    } else if(ast->type == AST_VAR_DECLARE) {
+        ast->var_res->stack_offset = TOTAL_DEPTH(allocation);
+        int offset_amt = 8;  // TODO: types
+        allocation->local_var_depth += offset_amt;
+
+        // because it's a statement, it semantically shouldn't have a
+        // value position, but it's easier in the generator if we
+        // just stick one on it
+        ast->pos = xcc_malloc(sizeof(ValuePosition));
+        ast->pos->type = POS_STACK;
+        ast->pos->stack_offset = ast->var_res->stack_offset;
+    } else if(ast->type == AST_VAR_USE) {
+        ast->pos = xcc_malloc(sizeof(ValuePosition));
+        ast->pos->type = POS_STACK;
+        ast->pos->stack_offset = ast->var_res->stack_offset;
+    } else if(is_expression_node(ast)) {
         ast->pos = xcc_malloc(sizeof(ValuePosition));
         // TODO: this is super terrible and tries to spill as much as possible
         ast->pos->type = POS_STACK;
-        ast->pos->stack_offset = allocation->depth;
-        offset_amt = 8;  // TODO: types
-        allocation->depth += offset_amt;
-        allocation->max_depth = max(allocation->depth, allocation->max_depth);
+        ast->pos->stack_offset = TOTAL_DEPTH(allocation);
+        int offset_amt = 8;  // TODO: types
+        allocation->temporary_depth += offset_amt;
     }
 
-    if(ast->type == AST_BODY) {
-        ast->block_max_stack_depth = allocation->max_depth;
-    }
+    allocation->max_depth = max(TOTAL_DEPTH(allocation), allocation->max_depth);
 }
 
 static void allocate_vals_for_func(AST *func) {
@@ -48,10 +65,14 @@ static void allocate_vals_for_func(AST *func) {
     xcc_assert(func->type == AST_FUNCTION);
 
     AllocationStatus allocation;
-    allocation.depth = 0;
+    allocation.temporary_depth = 0;
+    allocation.local_var_depth = 0;
     allocation.max_depth = 0;
     allocate_vals_recursive(func, &allocation);
-    xcc_assert(allocation.depth == 0);
+
+    xcc_assert(allocation.temporary_depth == 0);
+    xcc_assert(allocation.local_var_depth == 0);
+    xcc_assert(TOTAL_DEPTH(&allocation) == 0);
 }
 
 void value_pos_allocate(AST *ast) {

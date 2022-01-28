@@ -100,14 +100,40 @@ static void generate_add_expression(GenContext *ctx, AST *ast) {
     ValuePosition *b = ast->nodes[1]->pos;
     ValuePosition *dest = ast->pos;
 
-    generate_move(a, dest); // TODO: be more sophisticated of which expr goes to dest
-    b = possibly_move_to_temp(b, dest);
+    ValuePosition *first_arg;
+    ValuePosition *second_arg;
 
-    generate_asm_partial("addq ");
-    generate_asm_pos(b);
-    generate_asm_partial(", ");
-    generate_asm_pos(dest);
-    generate_asm("");
+    if(value_pos_is_same(a, dest)) {
+        first_arg = a;
+        second_arg = b;
+    } else if(value_pos_is_same(b, dest)) {
+        first_arg = b;
+        second_arg = a;
+    } else {
+        first_arg = NULL;
+        second_arg = NULL;
+    }
+
+    if(first_arg && second_arg) {
+        generate_move(first_arg, dest);
+        second_arg = possibly_move_to_temp(second_arg, dest);
+
+        generate_asm_partial("addq ");
+        generate_asm_pos(second_arg);
+        generate_asm_partial(", ");
+        generate_asm_pos(dest);
+        generate_asm("");
+    } else {
+        ValuePosition *temp_reg_a = move_value_into_temp_reg(a);
+
+        generate_asm_partial("addq ");
+        generate_asm_pos(b);
+        generate_asm_partial(", ");
+        generate_asm_pos(temp_reg_a);
+        generate_asm("");
+
+        generate_move(temp_reg_a, dest);
+    }
 }
 
 static void generate_call_expression(GenContext *ctx, AST *ast) {
@@ -152,6 +178,9 @@ static void generate_expression(GenContext *ctx, AST *ast) {
         generate_add_expression(ctx, ast);
     } else if(ast->type == AST_CALL) {
         generate_call_expression(ctx, ast);
+    } else if(ast->type == AST_VAR_USE) {
+        // hopefully the value at value_pos has the variable value already...
+        // so we do nothing here
     } else {
         xcc_assert_not_reached_msg("unknown expression");
     }
@@ -178,6 +207,10 @@ static void generate_statement(GenContext *ctx, AST *ast) {
     } else if(ast->type == AST_STATEMENT_EXPRESSION) {
         xcc_assert(ast->num_nodes == 1);
         generate_expression(ctx, ast->nodes[0]);
+    } else if(ast->type == AST_VAR_DECLARE) {
+        xcc_assert(ast->num_nodes == 2);
+        generate_expression(ctx, ast->nodes[1]);
+        generate_move(ast->nodes[1]->pos, ast->pos);
     } else {
         xcc_assert_not_reached_msg("unknown statement");
     }
