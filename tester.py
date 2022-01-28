@@ -16,10 +16,8 @@ if not NO_MAKE:
 SUCCESS = 'success'
 FAILURE = 'failure'
 
-def run_test(test_file_name):
-    if 'notest' in test_file_name: return (SUCCESS,)
-
-    test_file_path = os.path.join(TEST_DIRECTORY, test_file_name)
+def run_test(test_file_path):
+    if 'notest' in test_file_path: return (SUCCESS,)
 
     with open(test_file_path) as test_file:
         source = test_file.read()
@@ -131,7 +129,13 @@ def run_test(test_file_name):
 all_results = []
 had_failure = False
 print(' ', end='')
-for test_file_name in os.listdir(TEST_DIRECTORY):
+
+all_test_filenames = [
+    os.path.join(TEST_DIRECTORY, file) for file in os.listdir(TEST_DIRECTORY)
+]
+all_test_filenames = reversed(sorted(all_test_filenames, key=os.path.getmtime))
+
+for test_file_name in all_test_filenames:
     res = run_test(test_file_name)
     all_results.append((test_file_name, res))
     if res[0] != SUCCESS:
