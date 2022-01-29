@@ -143,6 +143,8 @@ int main(int argc, char **argv) {
     Resolutions *resolutions = resolve(program_ast);
     if(xcc_verbose()) ast_dump(program_ast, "resolved");
 
+    check_lvalue(program_ast);
+
     value_pos_allocate(program_ast);
     if(xcc_verbose()) ast_dump(program_ast, "allocated");
 

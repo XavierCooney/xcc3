@@ -1,4 +1,4 @@
-parts = xcc lexer ast parser resolve value_pos generate generate_x64
+parts = xcc lexer ast parser resolve check_lvalue value_pos generate generate_x64
 
 object_files = $(addsuffix .o,$(addprefix build/,$(parts)))
 source_files = $(addsuffix .c,$(parts))
@@ -32,7 +32,7 @@ find_leak: xcc
 	RUNNING_IN_VALGRIND=y valgrind --leak-check=full \
          --show-leak-kinds=all \
          --track-origins=yes \
-		 ./xcc test.c -o out.S -v
+		 ./xcc test.c -o build/assembly.S -v
 
 .PHONY: clean
 clean:

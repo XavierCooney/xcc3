@@ -137,8 +137,26 @@ static AST *parse_additive(Parser *parser) {
     return a;
 }
 
+static AST *parse_assignment(Parser *parser) {
+    AST *a = parse_additive(parser);
+
+    if(accept(parser, TOK_EQUALS)) {
+        AST *assignment_ast = ast_new(AST_ASSIGN, prev_token(parser));
+        // The call to parse_assignment rather than parse_additive
+        // here allows assignment to be right associative
+        AST *b = parse_assignment(parser);
+
+        ast_append(assignment_ast, a);
+        ast_append(assignment_ast, b);
+
+        a = assignment_ast;
+    }
+
+    return a;
+}
+
 static AST *parse_expression(Parser *parser) {
-    return parse_additive(parser);
+    return parse_assignment(parser);
 }
 
 static AST *parse_statement(Parser *parser) {

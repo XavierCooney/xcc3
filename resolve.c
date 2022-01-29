@@ -9,6 +9,7 @@ static FunctionResolution *append_func_resolution(
     FunctionResolution *new_res = xcc_malloc(sizeof(FunctionResolution));
     new_res->name = name;
     new_res->param_list = param_ast;
+    new_res->next_func_resolution = NULL;
 
     if(!res->func_resolutions_head) {
         res->func_resolutions_head = new_res;
@@ -27,6 +28,8 @@ static VariableResolution *append_var_resolution_all(
 ) {
     VariableResolution *new_res = xcc_malloc(sizeof(VariableResolution));
     new_res->name = name;
+    new_res->next_variable_resolution = NULL;
+    new_res->stack_offset = -1;
 
     if(!res->all_var_resolutions_head) {
         res->all_var_resolutions_head = new_res;

@@ -9,7 +9,7 @@ typedef struct {
 
 static bool is_expression_node(AST *ast) {
     ASTType t = ast->type;
-    return t == AST_INTEGER_LITERAL || t == AST_ADD || t == AST_CALL || t == AST_VAR_USE;
+    return t == AST_INTEGER_LITERAL || t == AST_ADD || t == AST_CALL || t == AST_VAR_USE || t == AST_ASSIGN;
 }
 
 static int max(int a, int b) {

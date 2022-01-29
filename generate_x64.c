@@ -42,7 +42,16 @@ static bool val_pos_is_memory(ValuePosition *a) {
     return a->type == POS_STACK;
 }
 
+static bool val_pos_is_writable(ValuePosition *a) {
+    // NOTE: could still be a temporary, so isn't necessarily
+    // an lvalue
+
+    return a->type == POS_STACK || a->type == POS_REG;
+}
+
 static void move_value_raw(ValuePosition *a, ValuePosition *b) {
+    xcc_assert(val_pos_is_writable(b));
+
     // Moves value at a into b, but at least one must not be in memory
     xcc_assert(!val_pos_is_memory(a) || !val_pos_is_memory(b));
 
@@ -71,12 +80,14 @@ static ValuePosition *possibly_move_to_temp(ValuePosition *a, ValuePosition *b) 
     }
 }
 
-static void generate_move(ValuePosition *a, ValuePosition *b) {
-    // Moves value at a into b
-    if(value_pos_is_same(a, b)) return;
+static void generate_move(ValuePosition *from, ValuePosition *to) {
+    xcc_assert(val_pos_is_writable(to));
 
-    a = possibly_move_to_temp(a, b);
-    move_value_raw(a, b);
+    // Moves value at a into b
+    if(value_pos_is_same(from, to)) return;
+
+    from = possibly_move_to_temp(from, to);
+    move_value_raw(from, to);
 }
 
 static void generate_integer_literal_expression(AST *ast) {
@@ -164,7 +175,7 @@ static void generate_call_expression(GenContext *ctx, AST *ast) {
         }
 
         xcc_assert(arg_reg != REG_LAST);
-        generate_move(ast->pos, value_pos_reg(arg_reg));
+        generate_move(argument_ast->pos, value_pos_reg(arg_reg));
     }
 
     generate_asm_partial("call ");
@@ -181,6 +192,23 @@ static void generate_expression(GenContext *ctx, AST *ast) {
     } else if(ast->type == AST_VAR_USE) {
         // hopefully the value at value_pos has the variable value already...
         // so we do nothing here
+    } else if(ast->type == AST_ASSIGN) {
+        xcc_assert(ast->num_nodes == 2);
+
+        generate_expression(ctx, ast->nodes[0]);
+        generate_expression(ctx, ast->nodes[1]);
+
+        ValuePosition *from = ast->nodes[1]->pos;
+        ValuePosition *to = ast->nodes[0]->pos;
+        ValuePosition *dest = ast->pos;
+
+        generate_move(from, to);
+
+        if(value_pos_is_same(from, dest) || value_pos_is_same(to, dest)) {
+            // do nothing
+        } else {
+            generate_move(from, dest); // from is less likely to be a memory position
+        }
     } else {
         xcc_assert_not_reached_msg("unknown expression");
     }
@@ -207,6 +235,7 @@ static void generate_statement(GenContext *ctx, AST *ast) {
     } else if(ast->type == AST_STATEMENT_EXPRESSION) {
         xcc_assert(ast->num_nodes == 1);
         generate_expression(ctx, ast->nodes[0]);
+        // TODO: have a value pos for discarding
     } else if(ast->type == AST_VAR_DECLARE) {
         xcc_assert(ast->num_nodes == 2);
         generate_expression(ctx, ast->nodes[1]);

@@ -73,6 +73,7 @@ const char *ast_node_type_to_str(ASTType type) {
         case AST_VAR_ASSIGN: return "VAR_ASSIGN";
         case AST_VAR_DECLARE: return "VAR_DECLARE";
         case AST_VAR_USE: return "VAR_USE";
+        case AST_ASSIGN: return "ASSIGN";
     }
 
     xcc_assert_not_reached();

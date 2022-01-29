@@ -16,6 +16,9 @@ if not NO_MAKE:
 SUCCESS = 'success'
 FAILURE = 'failure'
 
+def expand_backslash(s):
+    return s.replace('\\n', '\n')
+
 def run_test(test_file_path):
     if 'notest' in test_file_path: return (SUCCESS,)
 
@@ -105,10 +108,18 @@ def run_test(test_file_path):
             )
 
         for expected_run_output in get_param_values('run_output'):
-            if expected_run_output not in decoded_stdout:
+            if expand_backslash(expected_run_output) not in decoded_stdout:
                 return (
                     FAILURE,
                     f"Executable output doesn't have: `{expected_run_output}`",
+                    captured_output
+                )
+
+        for expected_run_output in get_param_values('run_output_full'):
+            if expand_backslash(expected_run_output) != decoded_stdout:
+                return (
+                    FAILURE,
+                    f"Executable output is not: `{expected_run_output}`",
                     captured_output
                 )
 
