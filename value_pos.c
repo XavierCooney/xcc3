@@ -27,7 +27,7 @@ static void allocate_vals_recursive(AST *ast, AllocationStatus *allocation) {
         allocate_vals_recursive(ast->nodes[i], allocation);
     }
 
-    allocation->temporary_depth = old_temporary_depth; // TODO: account for non-temporaries
+    allocation->temporary_depth = old_temporary_depth;
 
     if(ast_is_block(ast)) {
         allocation->local_var_depth = old_local_var_depth;

@@ -138,6 +138,7 @@ static AST *parse_additive(Parser *parser) {
 }
 
 static AST *parse_assignment(Parser *parser) {
+    // technically this is not to-spec but in that case it's probably not an lvalue anyway
     AST *a = parse_additive(parser);
 
     if(accept(parser, TOK_EQUALS)) {

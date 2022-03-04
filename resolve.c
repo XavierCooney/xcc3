@@ -8,8 +8,9 @@ static FunctionResolution *append_func_resolution(
 
     FunctionResolution *new_res = xcc_malloc(sizeof(FunctionResolution));
     new_res->name = name;
-    new_res->param_list = param_ast;
     new_res->next_func_resolution = NULL;
+    new_res->argument_types = NULL;
+    new_res->return_type = NULL;
 
     if(!res->func_resolutions_head) {
         res->func_resolutions_head = new_res;
@@ -69,6 +70,8 @@ static void resolve_func_declaration(AST *ast, Resolutions *res) {
     FunctionResolution *new_res = append_func_resolution(res, name, ast->nodes[1]);
     new_res->num_arguments = ast->nodes[1]->num_nodes;
     ast->function_res = new_res;
+
+    res->current_func = new_res;
 }
 
 static void resolve_function_call(AST *ast, Resolutions *resolutions) {
@@ -124,24 +127,33 @@ static void resolve_var_usage(AST *ast, Resolutions *resolutions) {
 }
 
 static void resolve_recursive(AST *ast, Resolutions *res) {
-    if(ast->type == AST_FUNCTION_PROTOTYPE || ast->type == AST_FUNCTION) {
+    if (ast->type == AST_FUNCTION_PROTOTYPE || ast->type == AST_FUNCTION) {
         resolve_func_declaration(ast, res);
     }
 
-    if(ast->type == AST_CALL) {
+    if (ast->type == AST_CALL) {
         resolve_function_call(ast, res);
     }
 
-    if(ast->type == AST_VAR_DECLARE) {
+    if (ast->type == AST_VAR_DECLARE) {
         resolve_var_declare(ast, res);
     }
 
-    if(ast->type == AST_VAR_USE) {
+    if (ast->type == AST_VAR_USE) {
         resolve_var_usage(ast, res);
     }
 
-    for(int i = 0; i < ast->num_nodes; ++i) {
+    if (ast->type == AST_RETURN_STMT) {
+        xcc_assert(res->current_func);
+        ast->function_res = res->current_func;
+    }
+
+    for (int i = 0; i < ast->num_nodes; ++i) {
         resolve_recursive(ast->nodes[i], res);
+    }
+
+    if(ast->type == AST_FUNCTION_PROTOTYPE || ast->type == AST_FUNCTION) {
+        res->current_func = NULL;
     }
 }
 
@@ -158,6 +170,8 @@ Resolutions *resolve(AST *program) {
     res->num_local_var_resolutions_allocated = 0;
     res->local_var_resolutions = NULL;
 
+    res->current_func = NULL;
+
     resolve_recursive(program, res);
 
     return res;
@@ -169,6 +183,9 @@ void resolve_free(Resolutions *res) {
     FunctionResolution *func_res = res->func_resolutions_head;
     while(func_res) {
         FunctionResolution *next_func_res = func_res->next_func_resolution;
+        if (func_res->argument_types) {
+            xcc_free(func_res->argument_types);
+        }
         xcc_free(func_res);
         func_res = next_func_res;
     }

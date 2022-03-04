@@ -3,12 +3,15 @@
 #include "xcc.h"
 
 struct FunctionResolution;
+struct Typee;
 typedef struct FunctionResolution {
     // TODO: return type
     const char *name;
-    AST *param_list;
     int num_arguments;
     struct FunctionResolution *next_func_resolution;
+
+    struct Type **argument_types;
+    struct Type *return_type;
 } FunctionResolution;
 
 struct VariableResolution;
@@ -29,6 +32,8 @@ typedef struct {
     int num_local_var_resolutions;
     int num_local_var_resolutions_allocated;
     VariableResolution **local_var_resolutions;
+
+    FunctionResolution *current_func;
 } Resolutions;
 
 Resolutions *resolve(AST *program);

@@ -24,11 +24,12 @@ AST *ast_new(ASTType type, Token *token) {
     new_ast->type = type;
     new_ast->main_token = token;
     new_ast->unknown_resolution = NULL;
+    new_ast->value_type = NULL;
 
     if(type == AST_BODY) {
         new_ast->block_max_stack_depth = -1;
     }
-    if(type == AST_FUNCTION || type == AST_FUNCTION_PROTOTYPE || type == AST_CALL) {
+    if(type == AST_FUNCTION || type == AST_FUNCTION_PROTOTYPE || type == AST_CALL || type == AST_RETURN_STMT) {
         new_ast->function_res = NULL;
     }
 
@@ -74,6 +75,8 @@ const char *ast_node_type_to_str(ASTType type) {
         case AST_VAR_DECLARE: return "VAR_DECLARE";
         case AST_VAR_USE: return "VAR_USE";
         case AST_ASSIGN: return "ASSIGN";
+        case AST_CONVERT_TO_BOOL: return "CONVERT_TO_BOOL";
+        case AST_CONVERT_TO_INT: return "CONVERT_TO_INT";
     }
 
     xcc_assert_not_reached();
@@ -111,19 +114,26 @@ static void ast_debug_internal(bool just_lines, AST *ast, int depth,
     if(ast->type == AST_INTEGER_LITERAL) {
         fprintf(stderr, " [%lld]", ast->integer_literal_val);
     } else if(ast->type == AST_FUNCTION) {
-        fprintf(stderr, " [%s]", ast->identifier_string);
+        fprintf(stderr, " [%s] [resolution %p]", ast->identifier_string, ast->function_res);
     } else if(ast->type == AST_FUNCTION_PROTOTYPE) {
-        fprintf(stderr, " [%s]", ast->identifier_string);
+        fprintf(stderr, " [%s] [resolution %p]", ast->identifier_string, ast->function_res);
     } else if(ast->type == AST_PARAMETER) {
         fprintf(stderr, " [%s]", ast->identifier_string);
     } else if(ast->type == AST_CALL) {
-        fprintf(stderr, " [%s]", ast->identifier_string);
+        fprintf(stderr, " [%s] [resolution %p]", ast->identifier_string, ast->function_res);
+    } else if(ast->type == AST_RETURN_STMT) {
+        fprintf(stderr, " [resolution %p]", ast->function_res);
     } else if(ast->type == AST_VAR_DECLARE) {
         fprintf(stderr, " [%s] [resolution %p]", ast->identifier_string, ast->var_res);
     } else if(ast->type == AST_VAR_USE) {
         fprintf(stderr, " [%s] [resolution %p]", ast->identifier_string, ast->var_res);
     } else if(ast->type == AST_BODY) {
         fprintf(stderr, " [max depth %i]", ast->block_max_stack_depth);
+    }
+
+    if(ast->value_type) {
+        fprintf(stderr, " ");
+        type_dump(ast->value_type);
     }
 
     if(ast->pos) {

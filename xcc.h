@@ -30,4 +30,5 @@ bool xcc_verbose();
 #include "value_pos.h"
 #include "parser.h"
 #include "resolve.h"
+#include "types.h"
 #include "generate.h"

@@ -7,13 +7,14 @@ typedef enum {
     AST_BODY, AST_RETURN_STMT, AST_INTEGER_LITERAL,
     AST_ADD, AST_CALL, AST_STATEMENT_EXPRESSION,
     AST_VAR_DECLARE, AST_VAR_ASSIGN, AST_VAR_USE,
-    AST_ASSIGN
+    AST_ASSIGN, AST_CONVERT_TO_INT, AST_CONVERT_TO_BOOL
 } ASTType;
 
 struct AST;
 struct ValuePosition;
 struct FunctionResolution;
 struct VariableResolution;
+struct Type;
 typedef struct AST {
     ASTType type;
     Token *main_token;
@@ -23,6 +24,7 @@ typedef struct AST {
     struct AST **nodes;
 
     struct ValuePosition *pos;
+    struct Type *value_type;
 
     union {
         long long integer_literal_val;

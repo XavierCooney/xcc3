@@ -145,6 +145,9 @@ int main(int argc, char **argv) {
 
     check_lvalue(program_ast);
 
+    type_propogate(program_ast);
+    if(xcc_verbose()) ast_dump(program_ast, "typed");
+
     value_pos_allocate(program_ast);
     if(xcc_verbose()) ast_dump(program_ast, "allocated");
 
@@ -163,6 +166,7 @@ int main(int argc, char **argv) {
     }
 
     value_pos_free_preallocated();
+    type_free_all();
     resolve_free(resolutions);
     ast_free(program_ast);
     lex_free_lexer(lexer);
