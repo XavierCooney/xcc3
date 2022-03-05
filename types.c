@@ -341,8 +341,7 @@ void perform_binary_arithmetic_conversion(AST *parent_expr) {
         parent_expr->nodes[1]->value_type
     ));
 
-
-    xcc_assert(common_type);
+    parent_expr->value_type = common_type;
 }
 
 #define TYPE_PROPOGATE_RECURSE(ast) for(int i = 0; i < (ast)->num_nodes; ++i) { type_propogate(ast->nodes[i]); }
@@ -367,7 +366,7 @@ void type_propogate(AST *ast) {
         // I think this check is also done as well at the resolution stage...
         xcc_assert(ast->function_res->num_arguments == ast->nodes[1]->num_nodes);
 
-        if (ast->function_res->argument_types) {
+        if (ast->function_res->return_type) {
             for (int i = 0; i < ast->function_res->num_arguments; ++i) {
                 Type *this_arg_type = ast->nodes[1]->nodes[i]->value_type;
                 xcc_assert(this_arg_type);
@@ -413,6 +412,58 @@ void type_propogate(AST *ast) {
     } else if (ast->type == AST_FUNC_DECL_PARAM_LIST) {
         // not much to do here i think
         TYPE_PROPOGATE_RECURSE(ast);
+    } else if (ast->type == AST_VAR_DECLARE) {
+        xcc_assert(ast->num_nodes >= 1);
+        xcc_assert(ast->num_nodes <= 2);
+
+        type_propogate(ast->nodes[0]);
+        xcc_assert(ast->nodes[0]->value_type);
+
+        if (ast->num_nodes == 2) {
+            type_propogate(ast->nodes[1]);
+            implicitly_convert(&ast->nodes[1], ast->nodes[0]->value_type);
+        }
+
+        xcc_assert(ast->var_res);
+        xcc_assert(!ast->var_res->var_type);
+
+        ast->var_res->var_type = ast->nodes[0]->value_type;
+    } else if (ast->type == AST_VAR_USE) {
+        xcc_assert(ast->num_nodes == 0);
+
+        xcc_assert(ast->var_res);
+        xcc_assert(ast->var_res->var_type);
+
+        ast->value_type = ast->var_res->var_type;
+    } else if (ast->type == AST_CALL) {
+        // not much to do here i think
+        TYPE_PROPOGATE_RECURSE(ast);
+
+        xcc_assert(ast->function_res);
+        xcc_assert(ast->num_nodes == ast->function_res->num_arguments);
+        xcc_assert(ast->function_res->return_type);
+
+        for (int i = 0; i < ast->num_nodes; ++i) {
+            implicitly_convert(&ast->nodes[i], ast->function_res->argument_types[i]);
+        }
+
+        ast->value_type = ast->function_res->return_type;
+    } else if (ast->type == AST_ASSIGN) {
+        // lvalue checking is done in check_lvalue.c
+        xcc_assert(ast->num_nodes == 2);
+        type_propogate(ast->nodes[0]);
+        type_propogate(ast->nodes[1]);
+
+        Type *var_type = ast->nodes[0]->value_type;
+        xcc_assert(var_type);
+
+        if (var_type->is_const) {
+            prog_error_ast("Can't assign to a const var!", ast);
+        }
+
+        implicitly_convert(&ast->nodes[1], var_type);
+
+        ast->value_type = var_type;
     } else if (ast->type == AST_PARAMETER) {
         xcc_assert(ast->num_nodes == 1);
         type_propogate(ast->nodes[0]);
@@ -422,16 +473,6 @@ void type_propogate(AST *ast) {
     } else if (ast->type == AST_TYPE) {
         // TODO
         ast->value_type = type_new_int(TYPE_INT, false);
-    } else if (ast->type == AST_VAR_DECLARE) {
-        xcc_assert(ast->num_nodes >= 1);
-        xcc_assert(ast->num_nodes <= 2);
-
-        type_propogate(ast->nodes[0]);
-
-        if (ast->num_nodes == 2) {
-            type_propogate(ast->nodes[1]);
-            implicitly_convert(&ast->nodes[1], ast->nodes[0]->value_type);
-        }
     } else if (ast->type == AST_INTEGER_LITERAL) {
         ast->value_type = type_new_int(TYPE_INT, false);
     } else if (ast->type == AST_RETURN_STMT) {
@@ -443,6 +484,12 @@ void type_propogate(AST *ast) {
         xcc_assert(return_type);
 
         implicitly_convert(&ast->nodes[0], return_type);
+    } else if (ast->type == AST_ADD) {
+        TYPE_PROPOGATE_RECURSE(ast);
+        perform_binary_arithmetic_conversion(ast);
+        xcc_assert(ast->value_type != NULL);
+    } else if (ast->type == AST_STATEMENT_EXPRESSION) {
+        TYPE_PROPOGATE_RECURSE(ast); // nothing to do here
     } else if (ast->type == AST_BODY) {
         TYPE_PROPOGATE_RECURSE(ast);
     } else {

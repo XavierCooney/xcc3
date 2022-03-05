@@ -16,8 +16,8 @@ typedef struct FunctionResolution {
 
 struct VariableResolution;
 typedef struct VariableResolution {
-    // TODO: variable type
     const char *name;
+    struct Type *var_type;
     int stack_offset;
     struct VariableResolution *next_variable_resolution;
 } VariableResolution;

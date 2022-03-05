@@ -31,6 +31,7 @@ static VariableResolution *append_var_resolution_all(
     new_res->name = name;
     new_res->next_variable_resolution = NULL;
     new_res->stack_offset = -1;
+    new_res->var_type = NULL;
 
     if(!res->all_var_resolutions_head) {
         res->all_var_resolutions_head = new_res;

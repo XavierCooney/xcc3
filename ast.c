@@ -71,7 +71,6 @@ const char *ast_node_type_to_str(ASTType type) {
         case AST_ADD: return "ADD";
         case AST_CALL: return "CALL";
         case AST_STATEMENT_EXPRESSION: return "STATEMENT_EXPRESSION";
-        case AST_VAR_ASSIGN: return "VAR_ASSIGN";
         case AST_VAR_DECLARE: return "VAR_DECLARE";
         case AST_VAR_USE: return "VAR_USE";
         case AST_ASSIGN: return "ASSIGN";
