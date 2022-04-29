@@ -9,7 +9,7 @@ NORETURN void xcc_assert_error_internal(const char *msg, int compiler_line_num,
                                                 (msg), __LINE__, \
                                                 __FILE__, __func__ \
                                             ); \
-                                        } while(false);
+                                        } while(false)
 
 #define xcc_assert(condition) xcc_assert_msg((condition), NULL)
 

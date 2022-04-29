@@ -22,6 +22,10 @@ typedef struct ValuePosition {
         int stack_offset;
         RegLoc register_num;
     };
+
+    int size;
+    int needed_alignment;
+    int is_signed;
 } ValuePosition;
 
 void value_pos_allocate(AST *ast);

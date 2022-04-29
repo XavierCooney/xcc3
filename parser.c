@@ -56,7 +56,7 @@ static Token *expect(Parser *parser, TokenType token_type) {
         );
         end_prog_error();
     }
-    xcc_assert_not_reached()
+    xcc_assert_not_reached();
 }
 
 static AST *accept_type(Parser *parser) {

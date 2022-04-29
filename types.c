@@ -179,7 +179,7 @@ static int get_integer_rank_from_type(Type *type) {
 static bool integer_type_is_signed(Type *type) {
     xcc_assert(type->type_type == TYPE_INTEGER);
 
-    switch(type->integer_type) {
+    switch (type->integer_type) {
         case TYPE_BOOL: return false;
 
         case TYPE_CHAR: return true; // System V ABI

@@ -9,12 +9,69 @@ typedef struct {
 
 static bool is_expression_node(AST *ast) {
     ASTType t = ast->type;
-    return t == AST_INTEGER_LITERAL || t == AST_ADD || t == AST_CALL || t == AST_VAR_USE || t == AST_ASSIGN;
+    int is_expression = t == AST_INTEGER_LITERAL || t == AST_ADD || t == AST_CALL;
+    is_expression = is_expression || t == AST_VAR_USE || t == AST_ASSIGN;
+
+    if (is_expression) {
+        xcc_assert(ast->value_type != NULL);
+    }
+
+    return is_expression;
 }
 
 static int max(int a, int b) {
     // Why is this not in the standard library???
     return (a > b) ? a : b;
+}
+
+static int get_type_size(Type *type) {
+    // TODO: this'll need to be move elsewhere to support sizeof()
+    // This stuff is directly from the ABI
+
+    if (type->type_type == TYPE_INTEGER) {
+        switch (type->integer_type) {
+            case TYPE_BOOL: return 1;
+            case TYPE_CHAR: return 1;
+            case TYPE_SCHAR: return 1;
+            case TYPE_UCHAR: return 1;
+
+            case TYPE_SHORT: return 2;
+            case TYPE_USHORT: return 2;
+
+            case TYPE_INT: return 4;
+            case TYPE_UINT: return 4;
+
+            case TYPE_LONG: return 8;
+            case TYPE_ULONG: return 8;
+
+            case TYPE_LONG_LONG: return 8;
+            case TYPE_ULONG_LONG: return 8;
+        }
+
+        xcc_assert_not_reached();
+    } else if (type->type_type == TYPE_POINTER) {
+        return 8;
+    } else {
+        xcc_assert_not_reached_msg("TODO: size of type");
+    }
+}
+
+static int get_type_alignment(Type *type) {
+    if (type->type_type == TYPE_INTEGER) {
+        // i don't know if it's a coincidence, but for integers,
+        // the alignment is always equal to the size...
+        return get_type_size(type);
+    } else if (type->type_type == TYPE_POINTER) {
+        // same for pointers
+        return get_type_size(type);
+    } else {
+        xcc_assert_not_reached_msg("TODO: alignment for type");
+    }
+}
+
+static void set_value_pos_to_type(ValuePosition *pos, Type *type) {
+    pos->size = get_type_size(type);
+    pos->needed_alignment = get_type_alignment(type);
 }
 
 #define TOTAL_DEPTH(allocation) ((allocation)->temporary_depth + (allocation)->local_var_depth)
@@ -49,7 +106,10 @@ static void allocate_vals_recursive(AST *ast, AllocationStatus *allocation) {
         ast->pos->stack_offset = ast->var_res->stack_offset;
     } else if(is_expression_node(ast)) {
         ast->pos = xcc_malloc(sizeof(ValuePosition));
+        set_value_pos_to_type(ast->pos, ast->value_type);
+
         // TODO: this is super terrible and tries to spill as much as possible
+
         ast->pos->type = POS_STACK;
         ast->pos->stack_offset = TOTAL_DEPTH(allocation);
         int offset_amt = 8;  // TODO: types
