@@ -26,6 +26,7 @@ typedef struct Type {
 } Type;
 
 Type *type_new_int(TypeInteger type, bool is_const);
+bool integer_type_is_signed(Type *type);
 void type_propogate(AST *ast);
 void type_free_all();
 void type_dump(Type *type);

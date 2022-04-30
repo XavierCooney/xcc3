@@ -25,6 +25,7 @@ void generate_asm_no_indent() {
 }
 
 void generate_asm_partial(const char *line) {
+    xcc_assert(line);
     possibly_generate_indent();
     fprintf(OUT_STREAM, "%s", line);
 }

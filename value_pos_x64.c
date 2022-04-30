@@ -11,6 +11,7 @@ static bool is_expression_node(AST *ast) {
     ASTType t = ast->type;
     int is_expression = t == AST_INTEGER_LITERAL || t == AST_ADD || t == AST_CALL;
     is_expression = is_expression || t == AST_VAR_USE || t == AST_ASSIGN;
+    is_expression = is_expression || t == AST_CONVERT_TO_INT || t == AST_CONVERT_TO_BOOL;
 
     if (is_expression) {
         xcc_assert(ast->value_type != NULL);
@@ -69,9 +70,20 @@ static int get_type_alignment(Type *type) {
     }
 }
 
+static int get_type_signedness(Type *type) {
+    if (type->type_type == TYPE_INTEGER) {
+        return integer_type_is_signed(type); // from types.c
+    } else if (type->type_type == TYPE_POINTER) {
+        return false;
+    } else {
+        xcc_assert_not_reached_msg("TODO: signedness of type");
+    }
+}
+
 static void set_value_pos_to_type(ValuePosition *pos, Type *type) {
     pos->size = get_type_size(type);
-    pos->needed_alignment = get_type_alignment(type);
+    pos->alignment = get_type_alignment(type);
+    pos->is_signed = get_type_signedness(type);
 }
 
 #define TOTAL_DEPTH(allocation) ((allocation)->temporary_depth + (allocation)->local_var_depth)
@@ -80,31 +92,39 @@ static void allocate_vals_recursive(AST *ast, AllocationStatus *allocation) {
     int old_temporary_depth = allocation->temporary_depth;
     int old_local_var_depth = allocation->local_var_depth;
 
-    for(int i = 0; i < ast->num_nodes; ++i) {
+    for (int i = 0; i < ast->num_nodes; ++i) {
         allocate_vals_recursive(ast->nodes[i], allocation);
     }
 
     allocation->temporary_depth = old_temporary_depth;
 
-    if(ast_is_block(ast)) {
+    // TODO: we also need to make sure of alignment for AST_CALL
+
+    if (ast_is_block(ast)) {
         allocation->local_var_depth = old_local_var_depth;
         ast->block_max_stack_depth = allocation->max_depth;
-    } else if(ast->type == AST_VAR_DECLARE) {
-        ast->var_res->stack_offset = TOTAL_DEPTH(allocation);
-        int offset_amt = 8;  // TODO: types
-        allocation->local_var_depth += offset_amt;
+    } else if (ast->type == AST_VAR_DECLARE) {
+        xcc_assert(ast->num_nodes == 2);
 
         // because it's a statement, it semantically shouldn't have a
         // value position, but it's easier in the generator if we
         // just stick one on it
         ast->pos = xcc_malloc(sizeof(ValuePosition));
         ast->pos->type = POS_STACK;
+        set_value_pos_to_type(ast->pos, ast->nodes[0]->value_type);
+
+        ast->var_res->stack_offset = TOTAL_DEPTH(allocation);
+        int offset_amt = ast->pos->size;
+        allocation->local_var_depth += offset_amt;
+
         ast->pos->stack_offset = ast->var_res->stack_offset;
-    } else if(ast->type == AST_VAR_USE) {
+    } else if (ast->type == AST_VAR_USE) {
         ast->pos = xcc_malloc(sizeof(ValuePosition));
+        set_value_pos_to_type(ast->pos, ast->value_type);
+
         ast->pos->type = POS_STACK;
         ast->pos->stack_offset = ast->var_res->stack_offset;
-    } else if(is_expression_node(ast)) {
+    } else if (is_expression_node(ast)) {
         ast->pos = xcc_malloc(sizeof(ValuePosition));
         set_value_pos_to_type(ast->pos, ast->value_type);
 
@@ -112,7 +132,7 @@ static void allocate_vals_recursive(AST *ast, AllocationStatus *allocation) {
 
         ast->pos->type = POS_STACK;
         ast->pos->stack_offset = TOTAL_DEPTH(allocation);
-        int offset_amt = 8;  // TODO: types
+        int offset_amt = ast->pos->size;
         allocation->temporary_depth += offset_amt;
     }
 
@@ -145,6 +165,9 @@ void value_pos_allocate(AST *ast) {
 
 bool value_pos_is_same(ValuePosition *a, ValuePosition *b) {
     if(a->type != b->type) return false;
+    if(a->is_signed != b->is_signed) return false;
+    if(a->size != b->size) return false;
+    if(a->alignment != b->alignment) return false;
 
     if(a->type == POS_STACK) {
         return a->stack_offset == b->stack_offset;
@@ -155,21 +178,35 @@ bool value_pos_is_same(ValuePosition *a, ValuePosition *b) {
     }
 }
 
+#define REG_PREALLOCATED_MAX_SIZE 8
+// TODO: this is wildly inefficient, but works and isn't that impactful...
 static ValuePosition *preallocated_positions = NULL;
 
-ValuePosition *value_pos_reg(RegLoc location) {
+// TODO: make this work for unsigned types
+ValuePosition *value_pos_reg(RegLoc location, int reg_size) {
     if(preallocated_positions == NULL) {
-        preallocated_positions = xcc_malloc(sizeof(ValuePosition) * REG_LAST);
+        preallocated_positions = xcc_malloc(
+            sizeof(ValuePosition) * REG_LAST * REG_PREALLOCATED_MAX_SIZE
+        );
 
-        for(int i = 0; i < REG_LAST; ++i) {
-            ValuePosition *pos = &preallocated_positions[i];
-            pos->type = POS_REG;
-            pos->register_num = i;
+        for(int reg_num = 0; reg_num < REG_LAST; ++reg_num) {
+            for (int size = 1; size <= REG_PREALLOCATED_MAX_SIZE; ++size) {
+                int index = reg_num * REG_PREALLOCATED_MAX_SIZE + (size - 1);
+                ValuePosition *pos = &preallocated_positions[index];
+                pos->type = POS_REG;
+                pos->register_num = reg_num;
+                pos->size = size;
+                // this is a bit of an assumption that happens to work for x64
+                pos->alignment = size;
+                pos->is_signed = true; // wat
+            }
         }
     }
 
     xcc_assert(location < REG_LAST);
-    return &preallocated_positions[location];
+    xcc_assert(reg_size >= 1 && reg_size <= REG_PREALLOCATED_MAX_SIZE);
+    int preallocated_index = location * REG_PREALLOCATED_MAX_SIZE + (reg_size - 1);
+    return &preallocated_positions[preallocated_index];
 }
 
 void value_pos_free_preallocated() {
@@ -180,6 +217,7 @@ void value_pos_free_preallocated() {
 
 void value_pos_dump(ValuePosition *value_pos) {
     fprintf(stderr, "[POS ");
+    fprintf(stderr, "size %d align %d ", value_pos->size, value_pos->alignment);
 
     switch(value_pos->type) {
         case POS_STACK:

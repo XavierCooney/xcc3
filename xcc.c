@@ -51,7 +51,7 @@ static bool has_begun_prog_error = false;
 static const char *current_compiling_stage_error_msg = NULL;
 
 const char *xcc_get_prog_error_stage() {
-    return current_compiling_stage_error_msg;;
+    return current_compiling_stage_error_msg;
 }
 
 void xcc_set_prog_error_stage(const char *stage) {
@@ -60,10 +60,11 @@ void xcc_set_prog_error_stage(const char *stage) {
 
 void begin_prog_error_range(const char *msg, Token *start_token, Token *end_token) {
     const char *stage = current_compiling_stage_error_msg ? current_compiling_stage_error_msg : "Program";
-    if(msg) {
-        fprintf( stderr, "%s error: %s:\n", stage, msg);
+
+    if (msg) {
+        fprintf(stderr, "%s error: %s:\n", stage, msg);
     } else {
-        fprintf( stderr, "%s error!\n", stage);
+        fprintf(stderr, "%s error!\n", stage);
     }
 
     lex_print_source_with_token_range(start_token, end_token);

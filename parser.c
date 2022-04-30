@@ -60,9 +60,14 @@ static Token *expect(Parser *parser, TokenType token_type) {
 }
 
 static AST *accept_type(Parser *parser) {
-    // *** returns NULL if no type is accepted ***
-    if(accept(parser, TOK_KEYWORD_INT)) {
+    // returns NULL if no type is accepted
+    if (accept(parser, TOK_KEYWORD_INT)) {
         AST *type_ast = ast_new(AST_TYPE, prev_token(parser));
+        ast_append_new(type_ast, AST_TYPE_INT, prev_token(parser));
+        return type_ast;
+    } else if (accept(parser, TOK_KEYWORD_CHAR)) {
+        AST *type_ast = ast_new(AST_TYPE, prev_token(parser));
+        ast_append_new(type_ast, AST_TYPE_CHAR, prev_token(parser));
         return type_ast;
     }
 
@@ -170,6 +175,7 @@ static AST *parse_statement(Parser *parser) {
         expect(parser, TOK_SEMICOLON);
         return return_ast;
     } else if((ast_type = accept_type(parser))) {
+        // TODO: actually properly parse declarations...
         Token *var_name_token = expect(parser, TOK_IDENTIFIER);
         const char *var_name = var_name_token->contents;
 

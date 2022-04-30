@@ -6,6 +6,7 @@ typedef enum {
     TOK_EOF,
 
     TOK_KEYWORD_INT,
+    TOK_KEYWORD_CHAR,
     TOK_KEYWORD_RETURN,
 
     TOK_IDENTIFIER,

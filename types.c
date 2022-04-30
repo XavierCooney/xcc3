@@ -176,7 +176,7 @@ static int get_integer_rank_from_type(Type *type) {
     return get_integer_rank(type->integer_type);
 }
 
-static bool integer_type_is_signed(Type *type) {
+bool integer_type_is_signed(Type *type) {
     xcc_assert(type->type_type == TYPE_INTEGER);
 
     switch (type->integer_type) {
@@ -202,7 +202,7 @@ static bool integer_type_is_signed(Type *type) {
     xcc_assert_not_reached();
 }
 
-static bool is_sclar_type(Type *type) {
+static bool is_scalar_type(Type *type) {
     TypeType type_type = type->type_type; // type type type type type type type
 
     // TODO: TYPE_FLOAT
@@ -243,7 +243,7 @@ static void implicitly_convert(AST **expr_ptr, Type *desired) {
     }
 
     if (desired->type_type == TYPE_INTEGER && desired->integer_type == TYPE_BOOL) {
-        if (!is_sclar_type(old_ast->value_type)) {
+        if (!is_scalar_type(old_ast->value_type)) {
             prog_error_ast("Cannot implicitly convert non-scalar to bool", old_ast);
         }
 
@@ -275,8 +275,7 @@ static void use_as_rvalue(AST *expr) {
     }
 }
 
-// TODO: static
-void perform_binary_arithmetic_conversion(AST *parent_expr) {
+static void perform_binary_arithmetic_conversion(AST *parent_expr) {
     xcc_assert(parent_expr->num_nodes == 2); // binary
 
     use_as_rvalue(parent_expr->nodes[0]);
@@ -300,10 +299,10 @@ void perform_binary_arithmetic_conversion(AST *parent_expr) {
         prog_error_ast("Expected an integer type", ast_right_old);
     }
 
+    Type *result_type = NULL;
+
     type_left = promote_integer(type_left);
     type_right = promote_integer(type_right);
-
-    Type *common_type = NULL;
 
     bool left_is_signed = integer_type_is_signed(type_left);
     bool right_is_signed = integer_type_is_signed(type_left);
@@ -312,28 +311,29 @@ void perform_binary_arithmetic_conversion(AST *parent_expr) {
     int right_rank = get_integer_rank_from_type(type_right);
 
     if (type_left->integer_type == type_right->integer_type) {
-        common_type = type_left;
+        result_type = type_left;
     } else if (left_is_signed == right_is_signed) {
         if (left_rank < right_rank) {
-            implicitly_convert(left_operand_ptr, type_right);
-            common_type = type_right;
+            result_type = type_right;
         } else {
             xcc_assert(left_rank > left_rank);
-            implicitly_convert(right_operand_ptr, type_left);
-            common_type = type_left;
+            result_type = type_left;
         }
     } else {
         // just a couple more cases that I couldn't be bothered to do...
         xcc_assert_not_reached_msg("TODO: type conversion of mixed signdness");
     }
 
-    xcc_assert(common_type);
+    implicitly_convert(left_operand_ptr, result_type);
+    implicitly_convert(right_operand_ptr, result_type);
+
+    xcc_assert(result_type);
     xcc_assert(types_are_compatible(
-        common_type,
+        result_type,
         parent_expr->nodes[0]->value_type
     ));
     xcc_assert(types_are_compatible(
-        common_type,
+        result_type,
         parent_expr->nodes[1]->value_type
     ));
     xcc_assert(types_are_compatible(
@@ -341,7 +341,7 @@ void perform_binary_arithmetic_conversion(AST *parent_expr) {
         parent_expr->nodes[1]->value_type
     ));
 
-    parent_expr->value_type = common_type;
+    parent_expr->value_type = result_type;
 }
 
 #define TYPE_PROPOGATE_RECURSE(ast) for(int i = 0; i < (ast)->num_nodes; ++i) { type_propogate(ast->nodes[i]); }
@@ -471,8 +471,16 @@ void type_propogate(AST *ast) {
         xcc_assert(ast->nodes[0]->value_type);
         ast->value_type = ast->nodes[0]->value_type;
     } else if (ast->type == AST_TYPE) {
-        // TODO
-        ast->value_type = type_new_int(TYPE_INT, false);
+        // TODO: do this better
+        xcc_assert(ast->num_nodes == 1);
+
+        if (ast->nodes[0]->type == AST_TYPE_INT) {
+            ast->value_type = type_new_int(TYPE_INT, false);
+        } else if (ast->nodes[0]->type == AST_TYPE_CHAR) {
+            ast->value_type = type_new_int(TYPE_CHAR, false);
+        } else {
+            xcc_assert_not_reached_msg("invalid contents of AST_TYPE");
+        }
     } else if (ast->type == AST_INTEGER_LITERAL) {
         ast->value_type = type_new_int(TYPE_INT, false);
     } else if (ast->type == AST_RETURN_STMT) {

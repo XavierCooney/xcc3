@@ -64,6 +64,8 @@ const char *ast_node_type_to_str(ASTType type) {
         case AST_FUNCTION_PROTOTYPE: return "FUNCTION_PROTOTYPE";
         case AST_PARAMETER: return "PARAMETER";
         case AST_TYPE: return "TYPE";
+        case AST_TYPE_INT: return "TYPE_INT";
+        case AST_TYPE_CHAR: return "TYPE_CHAR";
         case AST_FUNC_DECL_PARAM_LIST: return "FUNC_DECL_PARAM_LIST";
         case AST_BODY: return "BODY";
         case AST_RETURN_STMT: return "RETURN_STMT";
