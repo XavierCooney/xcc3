@@ -100,9 +100,8 @@ static void resolve_var_declare(AST *ast, Resolutions *resolutions) {
     const char *name = ast->identifier_string;
 
     // TODO: have an identifier_in_use(Resolutions *resolutions) function
-    for(VariableResolution *var_res = resolutions->all_var_resolutions_head; var_res;
-            var_res = var_res->next_variable_resolution) {
-        if(!strcmp(var_res->name, name)) {
+    for(int i = 0; i < resolutions->num_local_var_resolutions; ++i) {
+        if(!strcmp(resolutions->local_var_resolutions[i]->name, name)) {
             prog_error_ast("Redeclaration/shadowing of variable", ast);
         }
     }
@@ -155,6 +154,7 @@ static void resolve_recursive(AST *ast, Resolutions *res) {
 
     if(ast->type == AST_FUNCTION_PROTOTYPE || ast->type == AST_FUNCTION) {
         res->current_func = NULL;
+        res->num_local_var_resolutions = 0;
     }
 }
 

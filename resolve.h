@@ -5,7 +5,6 @@
 struct FunctionResolution;
 struct Typee;
 typedef struct FunctionResolution {
-    // TODO: return type
     const char *name;
     int num_arguments;
     struct FunctionResolution *next_func_resolution;

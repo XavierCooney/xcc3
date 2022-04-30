@@ -13,7 +13,7 @@ build/assembly.S: xcc test.c
 	./xcc test.c -v -o build/assembly.S
 
 build/test_out: build/assembly.S
-	gcc supplement.c build/assembly.S -o build/test_out -no-pie
+	gcc supplement.c -g build/assembly.S -o build/test_out -no-pie
 
 .PHONY: run
 run: build/test_out

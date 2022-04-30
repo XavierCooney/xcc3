@@ -89,7 +89,7 @@ static void generate_size_suffix(int size) {
 
 static void generate_asm_pos(ValuePosition *pos) {
     if(pos->type == POS_STACK) {
-        generate_asm_integer(-pos->stack_offset);
+        generate_asm_integer(-pos->stack_offset - pos->size);
         generate_asm_partial("(%rbp)"); // TODO: omit frame pointer
     } else if(pos->type == POS_REG) {
         const char *reg_name = NULL;
@@ -273,6 +273,8 @@ static void generate_call_expression(GenContext *ctx, AST *ast) {
 
     generate_asm_partial("call ");
     generate_asm(res->name);
+
+    generate_move(value_pos_reg(REG_RAX, ast->pos->size), ast->pos);
 }
 
 static void generate_int_conversion(GenContext *ctx, AST *ast) {
@@ -418,6 +420,7 @@ static void generate_function(AST *ast) {
     int stack_space = body->block_max_stack_depth;
     xcc_assert(stack_space >= 0);
 
+    // prologue
     if(stack_space > 0) {
         // TODO: omit-frame-pointer
         generate_asm("pushq %rbp");
