@@ -282,7 +282,7 @@ static void perform_binary_arithmetic_conversion(AST *parent_expr) {
     use_as_rvalue(parent_expr->nodes[1]);
 
     AST **left_operand_ptr = &parent_expr->nodes[0];
-    AST **right_operand_ptr = &parent_expr->nodes[0];
+    AST **right_operand_ptr = &parent_expr->nodes[1];
 
     AST *ast_left_old = parent_expr->nodes[0];
     AST *ast_right_old = parent_expr->nodes[1];

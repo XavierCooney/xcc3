@@ -89,7 +89,7 @@ static void generate_size_suffix(int size) {
 
 static void generate_asm_pos(ValuePosition *pos) {
     if(pos->type == POS_STACK) {
-        generate_asm_integer(-pos->stack_offset - pos->size);
+        generate_asm_integer(-pos->stack_offset);
         generate_asm_partial("(%rbp)"); // TODO: omit frame pointer
     } else if(pos->type == POS_REG) {
         const char *reg_name = NULL;
@@ -159,6 +159,9 @@ static ValuePosition *possibly_move_to_temp(ValuePosition *a, ValuePosition *b) 
 }
 
 static void generate_move(ValuePosition *from, ValuePosition *to) {
+    xcc_assert(from->size == to->size);
+    xcc_assert(from->is_signed == to->is_signed);
+
     xcc_assert(val_pos_is_writable(to));
 
     // Moves value at a into b
@@ -326,8 +329,20 @@ static void generate_int_conversion(GenContext *ctx, AST *ast) {
             generate_move(to_reg, to);
         }
     } else {
-        // I *think* no conversion is necessary because of the way
-        // 2's complement works...
+        // This is super janky. Also this relies on little-endianess
+        ValuePosition truncated_from;
+        memcpy(&truncated_from, from, sizeof(ValuePosition));
+        truncated_from.size = to->size;
+
+        int is_same_pos_type = truncated_from.type == to->type;
+
+        if (is_same_pos_type && to->type == POS_STACK && truncated_from.stack_offset == to->stack_offset) {
+            // same position in stack
+        } else if (is_same_pos_type && to->type == POS_REG && truncated_from.register_num == to->register_num) {
+            // same register
+        }
+
+        generate_move(&truncated_from, to);
     }
 }
 

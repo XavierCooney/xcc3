@@ -113,7 +113,7 @@ static void allocate_vals_recursive(AST *ast, AllocationStatus *allocation) {
         ast->pos->type = POS_STACK;
         set_value_pos_to_type(ast->pos, ast->nodes[0]->value_type);
 
-        ast->var_res->stack_offset = TOTAL_DEPTH(allocation);
+        ast->var_res->stack_offset = TOTAL_DEPTH(allocation) + ast->pos->size;
         int offset_amt = ast->pos->size;
         allocation->local_var_depth += offset_amt;
 
@@ -131,7 +131,7 @@ static void allocate_vals_recursive(AST *ast, AllocationStatus *allocation) {
         // TODO: this is super terrible and tries to spill as much as possible
 
         ast->pos->type = POS_STACK;
-        ast->pos->stack_offset = TOTAL_DEPTH(allocation);
+        ast->pos->stack_offset = TOTAL_DEPTH(allocation) + ast->pos->size;
         int offset_amt = ast->pos->size;
         allocation->temporary_depth += offset_amt;
     }
