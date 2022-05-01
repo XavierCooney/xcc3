@@ -3,7 +3,7 @@
 #include "xcc.h"
 
 typedef enum {
-    POS_LITERAL, POS_STACK, POS_REG
+    POS_LITERAL, POS_STACK, POS_REG, POS_VOID
 } PositionType;
 
 typedef enum {

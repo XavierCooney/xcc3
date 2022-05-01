@@ -1,14 +1,12 @@
 #include <stdio.h>
 
-typedef long long i64;
-
-void supplement_print_i64(i64 x) {
-    printf("%lli", x);
+void supplement_print_int(int x) {
+    printf("%d", x);
 }
-void supplement_print_space(i64 x) {
+void supplement_print_space(int x) {
     printf(" ");
 }
-void supplement_print_char_i64(i64 x) {
+void supplement_print_char_int(int x) {
     printf("%c", (char) x);
 }
 void supplement_print_nl() {

@@ -81,9 +81,15 @@ static int get_type_signedness(Type *type) {
 }
 
 static void set_value_pos_to_type(ValuePosition *pos, Type *type) {
-    pos->size = get_type_size(type);
-    pos->alignment = get_type_alignment(type);
-    pos->is_signed = get_type_signedness(type);
+    if (type->type_type == TYPE_INTEGER) {
+        pos->size = get_type_size(type);
+        pos->alignment = get_type_alignment(type);
+        pos->is_signed = get_type_signedness(type);
+    } else if (type->type_type == TYPE_VOID) {
+        return;
+    } else {
+        xcc_assert_not_reached();
+    }
 }
 
 #define TOTAL_DEPTH(allocation) ((allocation)->temporary_depth + (allocation)->local_var_depth)
@@ -112,6 +118,7 @@ static void allocate_vals_recursive(AST *ast, AllocationStatus *allocation) {
         ast->pos = xcc_malloc(sizeof(ValuePosition));
         ast->pos->type = POS_STACK;
         set_value_pos_to_type(ast->pos, ast->nodes[0]->value_type);
+        xcc_assert(ast->nodes[0]->value_type->type_type != TYPE_VOID);
 
         ast->var_res->stack_offset = TOTAL_DEPTH(allocation) + ast->pos->size;
         int offset_amt = ast->pos->size;
@@ -121,6 +128,7 @@ static void allocate_vals_recursive(AST *ast, AllocationStatus *allocation) {
     } else if (ast->type == AST_VAR_USE) {
         ast->pos = xcc_malloc(sizeof(ValuePosition));
         set_value_pos_to_type(ast->pos, ast->value_type);
+        xcc_assert(ast->value_type->type_type != TYPE_VOID);
 
         ast->pos->type = POS_STACK;
         ast->pos->stack_offset = ast->var_res->stack_offset;
@@ -128,12 +136,15 @@ static void allocate_vals_recursive(AST *ast, AllocationStatus *allocation) {
         ast->pos = xcc_malloc(sizeof(ValuePosition));
         set_value_pos_to_type(ast->pos, ast->value_type);
 
-        // TODO: this is super terrible and tries to spill as much as possible
-
-        ast->pos->type = POS_STACK;
-        ast->pos->stack_offset = TOTAL_DEPTH(allocation) + ast->pos->size;
-        int offset_amt = ast->pos->size;
-        allocation->temporary_depth += offset_amt;
+        if (ast->value_type->type_type == TYPE_VOID) {
+            ast->pos->type = POS_VOID;
+        } else {
+            // TODO: this is super terrible and tries to spill as much as possible
+            ast->pos->type = POS_STACK;
+            ast->pos->stack_offset = TOTAL_DEPTH(allocation) + ast->pos->size;
+            int offset_amt = ast->pos->size;
+            allocation->temporary_depth += offset_amt;
+        }
     }
 
     allocation->max_depth = max(TOTAL_DEPTH(allocation), allocation->max_depth);
@@ -217,7 +228,10 @@ void value_pos_free_preallocated() {
 
 void value_pos_dump(ValuePosition *value_pos) {
     fprintf(stderr, "[POS ");
-    fprintf(stderr, "size %d align %d ", value_pos->size, value_pos->alignment);
+
+    if (value_pos->type != POS_VOID) {
+        fprintf(stderr, "size %d align %d ", value_pos->size, value_pos->alignment);
+    }
 
     switch(value_pos->type) {
         case POS_STACK:
@@ -228,6 +242,9 @@ void value_pos_dump(ValuePosition *value_pos) {
             break;
         case POS_LITERAL:
             fprintf(stderr, "LITERAL]");
+            break;
+        case POS_VOID:
+            fprintf(stderr, "VOID]");
             break;
     }
 }

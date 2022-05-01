@@ -61,6 +61,9 @@ static Token *expect(Parser *parser, TokenType token_type) {
 
 static AST *accept_type(Parser *parser) {
     // returns NULL if no type is accepted
+
+    // There's probably a better way of representing types than having a different
+    // AST node for each type
     if (accept(parser, TOK_KEYWORD_INT)) {
         AST *type_ast = ast_new(AST_TYPE, prev_token(parser));
         ast_append_new(type_ast, AST_TYPE_INT, prev_token(parser));
@@ -68,6 +71,10 @@ static AST *accept_type(Parser *parser) {
     } else if (accept(parser, TOK_KEYWORD_CHAR)) {
         AST *type_ast = ast_new(AST_TYPE, prev_token(parser));
         ast_append_new(type_ast, AST_TYPE_CHAR, prev_token(parser));
+        return type_ast;
+    } else if (accept(parser, TOK_KEYWORD_VOID)) {
+        AST *type_ast = ast_new(AST_TYPE, prev_token(parser));
+        ast_append_new(type_ast, AST_TYPE_VOID, prev_token(parser));
         return type_ast;
     }
 

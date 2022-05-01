@@ -78,6 +78,19 @@ Type *type_new_int(TypeInteger integer_type, bool is_const) {
     return new_type;
 }
 
+static Type *type_new_void() {
+    static Type *void_type;
+
+    if (void_type == NULL) {
+        void_type = type_new();
+        void_type->type_type = TYPE_VOID;
+        void_type->is_const = false;
+        void_type->underlying = NULL;
+    }
+
+    return void_type;
+}
+
 static Type *copy_type(Type *type) {
     Type *new_type = type_new();
 
@@ -266,7 +279,13 @@ static void implicitly_convert(AST **expr_ptr, Type *desired) {
     // TODO: so much more...
 
     // TODO: better error message!
-    prog_error_ast("Cannot implicitly convert type", old_ast);
+    begin_prog_error_range("Cannot implicitly convert type", old_ast->main_token, old_ast->main_token);
+    fprintf(stderr, "The expression has type ");
+    type_dump(old_ast->value_type);
+    fprintf(stderr, ", but the expected type was ");
+    type_dump(desired);
+    fprintf(stderr, "!\n");
+    end_prog_error();
 }
 
 static void use_as_rvalue(AST *expr) {
@@ -404,6 +423,15 @@ void type_propogate(AST *ast) {
 
         if (ast->type == AST_FUNCTION) {
             xcc_assert(ast->num_nodes == 3);
+
+            // insert implicit return at end of void functions
+            if (ast->function_res->return_type->type_type == TYPE_VOID) {
+                AST *new_return_stmt = ast_append_new(
+                    ast->nodes[2], AST_RETURN_STMT, ast->main_token
+                );
+                new_return_stmt->function_res = ast->function_res;
+            }
+
             type_propogate(ast->nodes[2]);
         } else {
             xcc_assert(ast->type == AST_FUNCTION_PROTOTYPE);
@@ -478,20 +506,29 @@ void type_propogate(AST *ast) {
             ast->value_type = type_new_int(TYPE_INT, false);
         } else if (ast->nodes[0]->type == AST_TYPE_CHAR) {
             ast->value_type = type_new_int(TYPE_CHAR, false);
+        } else if (ast->nodes[0]->type == AST_TYPE_VOID) {
+            ast->value_type = type_new_void();
         } else {
             xcc_assert_not_reached_msg("invalid contents of AST_TYPE");
         }
     } else if (ast->type == AST_INTEGER_LITERAL) {
         ast->value_type = type_new_int(TYPE_INT, false);
     } else if (ast->type == AST_RETURN_STMT) {
-        xcc_assert(ast->num_nodes == 1);
-        type_propogate(ast->nodes[0]);
+        if (ast->num_nodes == 1) {
+            type_propogate(ast->nodes[0]);
 
-        xcc_assert(ast->function_res);
-        Type *return_type = ast->function_res->return_type;
-        xcc_assert(return_type);
+            xcc_assert(ast->function_res);
+            Type *return_type = ast->function_res->return_type;
+            xcc_assert(return_type);
 
-        implicitly_convert(&ast->nodes[0], return_type);
+            implicitly_convert(&ast->nodes[0], return_type);
+        } else {
+            xcc_assert(ast->num_nodes == 0);
+
+            if (ast->function_res->return_type->type_type != TYPE_VOID) {
+                prog_error_ast("empty return in non-void function", ast);
+            }
+        }
     } else if (ast->type == AST_ADD) {
         TYPE_PROPOGATE_RECURSE(ast);
         perform_binary_arithmetic_conversion(ast);
@@ -545,6 +582,8 @@ void type_dump(Type *type) {
 
     if(type->type_type == TYPE_INTEGER) {
         fprintf(stderr, "%s", int_type_to_string(type));
+    } else if (type->type_type == TYPE_VOID) {
+        fprintf(stderr, "void");
     } else {
         xcc_assert_not_reached();
     }

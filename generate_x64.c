@@ -277,7 +277,9 @@ static void generate_call_expression(GenContext *ctx, AST *ast) {
     generate_asm_partial("call ");
     generate_asm(res->name);
 
-    generate_move(value_pos_reg(REG_RAX, ast->pos->size), ast->pos);
+    if (ast->pos->type != POS_VOID) {
+        generate_move(value_pos_reg(REG_RAX, ast->pos->size), ast->pos);
+    }
 }
 
 static void generate_int_conversion(GenContext *ctx, AST *ast) {
@@ -382,18 +384,22 @@ static void generate_expression(GenContext *ctx, AST *ast) {
 
 static void generate_statement(GenContext *ctx, AST *ast) {
     if(ast->type == AST_RETURN_STMT) {
-        xcc_assert(ast->num_nodes == 1);
+        xcc_assert(ast->num_nodes <= 1);
 
-        AST *expression = ast->nodes[0];
-        generate_expression(ctx, expression);
+        if (ast->num_nodes == 1) {
+            AST *expression = ast->nodes[0];
+            generate_expression(ctx, expression);
 
-        generate_move(expression->pos, value_pos_reg(REG_RAX, expression->pos->size));
+            generate_move(expression->pos, value_pos_reg(REG_RAX, expression->pos->size));
+        }
 
         // epilogue
-        generate_asm_partial("addq $");
-        generate_asm_integer(ctx->reserved_stack_space);
-        generate_asm(", %rsp");
-        generate_asm("popq %rbp");
+        if (ctx->reserved_stack_space != 0) {
+            generate_asm_partial("addq $");
+            generate_asm_integer(ctx->reserved_stack_space);
+            generate_asm(", %rsp");
+            generate_asm("popq %rbp");
+        }
 
         generate_asm("retq");
     } else if(ast->type == AST_STATEMENT_EXPRESSION) {

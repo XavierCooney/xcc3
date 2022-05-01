@@ -7,6 +7,7 @@ typedef enum {
 
     TOK_KEYWORD_INT,
     TOK_KEYWORD_CHAR,
+    TOK_KEYWORD_VOID,
     TOK_KEYWORD_RETURN,
 
     TOK_IDENTIFIER,
@@ -22,7 +23,7 @@ typedef enum {
     TOK_INT_LITERAL,
 
     TOK_PLUS
-}  TokenType;
+} TokenType;
 
 typedef struct {
     TokenType type;
