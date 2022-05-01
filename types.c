@@ -266,14 +266,13 @@ static void implicitly_convert(AST **expr_ptr, Type *desired) {
         return;
     } else if (desired->type_type == TYPE_INTEGER) {
         // TODO: float
-        if (old_ast->value_type->type_type != TYPE_INTEGER) {
-            prog_error_ast("Cannot implicitly convert to int", old_ast);
+        if (old_ast->value_type->type_type == TYPE_INTEGER) {
+            AST *new_ast = add_conversion_in_ast(expr_ptr, AST_CONVERT_TO_INT);
+            new_ast->value_type = desired;
+
+            return;
         }
 
-        AST *new_ast = add_conversion_in_ast(expr_ptr, AST_CONVERT_TO_INT);
-        new_ast->value_type = desired;
-
-        return;
     }
 
     // TODO: so much more...

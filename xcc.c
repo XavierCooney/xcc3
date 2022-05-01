@@ -149,6 +149,8 @@ int main(int argc, char **argv) {
     type_propogate(program_ast);
     if(xcc_verbose()) ast_dump(program_ast, "typed");
 
+    check_for_return(program_ast);
+
     value_pos_allocate(program_ast);
     if(xcc_verbose()) ast_dump(program_ast, "allocated");
 

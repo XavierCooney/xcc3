@@ -1,4 +1,4 @@
-parts = xcc lexer ast parser resolve check_lvalue types value_pos_x64 generate generate_x64
+parts = xcc lexer ast parser resolve check_lvalue types misc_checks value_pos_x64 generate generate_x64
 
 object_files = $(addsuffix .o,$(addprefix build/,$(parts)))
 source_files = $(addsuffix .c,$(parts))

@@ -31,4 +31,5 @@ bool xcc_verbose();
 #include "parser.h"
 #include "resolve.h"
 #include "types.h"
+#include "misk_checks.h"
 #include "generate.h"
