@@ -33,5 +33,3 @@ bool value_pos_is_same(ValuePosition *a, ValuePosition *b);
 ValuePosition *value_pos_reg(RegLoc location, int reg_size);
 void value_pos_free_preallocated();
 void value_pos_dump(ValuePosition *value_pos);
-
-void check_lvalue(AST *ast); // in check_lvalue.c

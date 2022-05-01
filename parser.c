@@ -178,8 +178,11 @@ static AST *parse_statement(Parser *parser) {
 
     if(accept(parser, TOK_KEYWORD_RETURN)) {
         AST *return_ast = ast_new(AST_RETURN_STMT, first_token);
-        ast_append(return_ast, parse_expression(parser));
-        expect(parser, TOK_SEMICOLON);
+
+        if (!accept(parser, TOK_SEMICOLON)) {
+            ast_append(return_ast, parse_expression(parser));
+            expect(parser, TOK_SEMICOLON);
+        }
         return return_ast;
     } else if((ast_type = accept_type(parser))) {
         // TODO: actually properly parse declarations...

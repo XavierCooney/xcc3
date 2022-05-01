@@ -342,9 +342,10 @@ static void generate_int_conversion(GenContext *ctx, AST *ast) {
             // same position in stack
         } else if (is_same_pos_type && to->type == POS_REG && truncated_from.register_num == to->register_num) {
             // same register
+        } else {
+            generate_move(&truncated_from, to);
         }
 
-        generate_move(&truncated_from, to);
     }
 }
 

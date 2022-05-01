@@ -8,6 +8,8 @@ void supplement_print_nl();
 
 void x() {
     supplement_print_int(2);
+    return;
+    supplement_print_int(3);
 }
 
 int main() {
