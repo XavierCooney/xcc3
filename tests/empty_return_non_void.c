@@ -1,5 +1,5 @@
 // @compile_error!
-// @xcc_msg: empty return in non-void function:
+// @xcc_msg: empty return in non-void function!
 
 int my_func() {
     return;

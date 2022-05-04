@@ -62,7 +62,7 @@ void begin_prog_error_range(const char *msg, Token *start_token, Token *end_toke
     const char *stage = current_compiling_stage_error_msg ? current_compiling_stage_error_msg : "Program";
 
     if (msg) {
-        fprintf(stderr, "%s error: %s:\n", stage, msg);
+        fprintf(stderr, "%s error: %s!\n", stage, msg);
     } else {
         fprintf(stderr, "%s error!\n", stage);
     }

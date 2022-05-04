@@ -9,9 +9,10 @@ typedef struct {
 
 static bool is_expression_node(AST *ast) {
     ASTType t = ast->type;
-    int is_expression = t == AST_INTEGER_LITERAL || t == AST_ADD || t == AST_CALL;
+    int is_expression = t == AST_INTEGER_LITERAL || t == AST_CALL;
     is_expression = is_expression || t == AST_VAR_USE || t == AST_ASSIGN;
     is_expression = is_expression || t == AST_CONVERT_TO_INT || t == AST_CONVERT_TO_BOOL;
+    is_expression = is_expression || t == AST_ADD || t == AST_SUBTRACT;
 
     if (is_expression) {
         xcc_assert(ast->value_type != NULL);

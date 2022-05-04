@@ -60,9 +60,9 @@ static void append_var_resolution_local(
 static void resolve_func_declaration(AST *ast, Resolutions *res) {
     const char *name = ast->identifier_string;
     // Check if it's been seen previously
-    for(FunctionResolution *old_res = res->func_resolutions_head;
+    for (FunctionResolution *old_res = res->func_resolutions_head;
             old_res; old_res = old_res->next_func_resolution) {
-        if(strcmp(old_res->name, name)) continue;
+        if (strcmp(old_res->name, name)) continue;
 
         // TODO: redefinition
         prog_error_ast("function redefinition", ast);

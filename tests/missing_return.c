@@ -1,5 +1,5 @@
 // @compile_error!
-// @xcc_msg: function doesn't have a return:
+// @xcc_msg: function doesn't have a return!
 
 int g() {
     return 3;

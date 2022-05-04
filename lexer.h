@@ -22,7 +22,7 @@ typedef enum {
 
     TOK_INT_LITERAL,
 
-    TOK_PLUS
+    TOK_PLUS, TOK_MINUS, TOK_STAR, TOK_SLASH, TOK_PERCENT
 } TokenType;
 
 typedef struct {

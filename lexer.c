@@ -17,6 +17,10 @@ const char *lex_token_type_to_string(TokenType type) {
         case TOK_CLOSE_CURLY: return "CLOSE_CURLY";
         case TOK_INT_LITERAL: return "INT_LITERAL";
         case TOK_PLUS: return "PLUS";
+        case TOK_MINUS: return "MINUS";
+        case TOK_STAR: return "STAR";
+        case TOK_SLASH: return "SLASH";
+        case TOK_PERCENT: return "PERCENT";
         case TOK_EOF: return "EOF";
         case TOK_UNKNOWN: return "UNKNOWN";
     }
@@ -261,6 +265,12 @@ static void lex_a_token(Lexer *lexer) {
         return;
     } else if(try_lex_a_char(lexer, TOK_PLUS, '+')) {
         return;
+    } else if(try_lex_a_char(lexer, TOK_MINUS, '-')) {
+        return;
+    } else if(try_lex_a_char(lexer, TOK_STAR, '*')) {
+        return;
+    } else if(try_lex_a_char(lexer, TOK_PERCENT, '%')) {
+        return;
     } else if(try_lex_a_char(lexer, TOK_EQUALS, '=')) {
         return;
     } else if(current_char_is_whitespace(lexer)) {
@@ -275,6 +285,8 @@ static void lex_a_token(Lexer *lexer) {
     } else if(try_lex_an_integer(lexer)) {
         return;
     } else if(try_lex_a_comment(lexer)) {
+        return;
+    } else if(try_lex_a_char(lexer, TOK_SLASH, '/')) {
         return;
     } else {
         // Just to prevent an infinite loop...

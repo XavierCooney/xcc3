@@ -132,15 +132,22 @@ static AST *parse_primary(Parser *parser) {
     }
 }
 
-static AST *parse_additive(Parser *parser) {
+static AST *parse_multiplicative(Parser *parser) {
     AST *a = parse_primary(parser);
 
-    while(accept(parser, TOK_PLUS)) {
+    return a;
+}
+
+static AST *parse_additive(Parser *parser) {
+    AST *a = parse_multiplicative(parser);
+
+    while(accept(parser, TOK_PLUS) || accept(parser, TOK_MINUS)) {
         Token *token = prev_token(parser);
 
-        AST *b = parse_primary(parser);
+        AST *b = parse_multiplicative(parser);
 
-        AST *add_ast = ast_new(AST_ADD, token);
+        ASTType ast_type = token->type == TOK_PLUS ? AST_ADD : AST_SUBTRACT;
+        AST *add_ast = ast_new(ast_type, token);
         ast_append(add_ast, a);
         ast_append(add_ast, b);
         a = add_ast;

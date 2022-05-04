@@ -19,7 +19,7 @@ const char *xcc_get_prog_error_stage();
 void xcc_set_prog_error_stage(const char *stage);
 void begin_prog_error_range(const char *msg, Token *start_token, Token *end_token);
 NORETURN void end_prog_error();
-#define prog_error(msg, token) do { begin_prog_error_range((msg), (token), (token)); end_prog_error(); } while(false);
+#define prog_error(msg, token) do { begin_prog_error_range((msg), (token), (token)); end_prog_error(); } while(false)
 
 bool xcc_verbose();
 #define debugf(...) (xcc_verbose() ? frpintf(stderr, __VA_ARGS__) : (void) 0)

@@ -72,6 +72,10 @@ const char *ast_node_type_to_str(ASTType type) {
         case AST_RETURN_STMT: return "RETURN_STMT";
         case AST_INTEGER_LITERAL: return "INTEGER_LITERAL";
         case AST_ADD: return "ADD";
+        case AST_SUBTRACT: return "SUBTRACT";
+        case AST_MULTIPLY: return "MULTIPLY";
+        case AST_DIVIDE: return "DIVIDE";
+        case AST_REMAINDER: return "REMAINDER";
         case AST_CALL: return "CALL";
         case AST_STATEMENT_EXPRESSION: return "STATEMENT_EXPRESSION";
         case AST_VAR_DECLARE: return "VAR_DECLARE";

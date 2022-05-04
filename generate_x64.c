@@ -189,7 +189,7 @@ static void generate_integer_literal_expression(AST *ast) {
 
 static void generate_expression(GenContext *ctx, AST *ast);
 
-static void generate_add_expression(GenContext *ctx, AST *ast) {
+static void generate_binary_arithmetic_expression(GenContext *ctx, AST *ast) {
     xcc_assert(ast->num_nodes == 2);
 
     generate_expression(ctx, ast->nodes[0]);
@@ -213,11 +213,19 @@ static void generate_add_expression(GenContext *ctx, AST *ast) {
         second_arg = NULL;
     }
 
+    const char *opcode = NULL;
+    if (ast->type == AST_ADD) {
+        opcode = "add";
+    } else if (ast->type == AST_SUBTRACT) {
+        opcode = "sub";
+    }
+    xcc_assert(opcode);
+
     if(first_arg && second_arg) {
         generate_move(first_arg, dest);
         second_arg = possibly_move_to_temp(second_arg, dest);
 
-        generate_asm_partial("add");
+        generate_asm_partial(opcode);
         generate_size_suffix(ast->pos->size);
         generate_asm_partial(" ");
 
@@ -229,7 +237,7 @@ static void generate_add_expression(GenContext *ctx, AST *ast) {
     } else {
         ValuePosition *temp_reg_a = move_value_into_temp_reg(a);
 
-        generate_asm_partial("add");
+        generate_asm_partial(opcode);
         generate_size_suffix(ast->pos->size);
         generate_asm_partial(" ");
 
@@ -352,7 +360,9 @@ static void generate_expression(GenContext *ctx, AST *ast) {
     if (ast->type == AST_INTEGER_LITERAL) {
         generate_integer_literal_expression(ast);
     } else if (ast->type == AST_ADD) {
-        generate_add_expression(ctx, ast);
+        generate_binary_arithmetic_expression(ctx, ast);
+    } else if (ast->type == AST_SUBTRACT) {
+        generate_binary_arithmetic_expression(ctx, ast);
     } else if (ast->type == AST_CALL) {
         generate_call_expression(ctx, ast);
     } else if (ast->type == AST_VAR_USE) {

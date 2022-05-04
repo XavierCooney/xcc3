@@ -539,6 +539,10 @@ void type_propogate(AST *ast) {
         TYPE_PROPOGATE_RECURSE(ast);
         perform_binary_arithmetic_conversion(ast);
         xcc_assert(ast->value_type != NULL);
+    } else if (ast->type == AST_SUBTRACT) {
+        TYPE_PROPOGATE_RECURSE(ast);
+        perform_binary_arithmetic_conversion(ast);
+        xcc_assert(ast->value_type != NULL);
     } else if (ast->type == AST_STATEMENT_EXPRESSION) {
         TYPE_PROPOGATE_RECURSE(ast); // nothing to do here
     } else if (ast->type == AST_BODY) {
