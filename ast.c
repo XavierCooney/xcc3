@@ -119,13 +119,13 @@ static void ast_debug_internal(bool just_lines, AST *ast, int depth,
         fprintf(stderr, " [%s] [resolution %p]", ast->identifier_string, ast->function_res);
     } else if(ast->type == AST_FUNCTION_PROTOTYPE) {
         fprintf(stderr, " [%s] [resolution %p]", ast->identifier_string, ast->function_res);
-    } else if(ast->type == AST_PARAMETER) {
-        fprintf(stderr, " [%s]", ast->identifier_string);
     } else if(ast->type == AST_CALL) {
         fprintf(stderr, " [%s] [resolution %p]", ast->identifier_string, ast->function_res);
     } else if(ast->type == AST_RETURN_STMT) {
         fprintf(stderr, " [resolution %p]", ast->function_res);
     } else if(ast->type == AST_VAR_DECLARE) {
+        fprintf(stderr, " [%s] [resolution %p]", ast->identifier_string, ast->var_res);
+    } else if(ast->type == AST_PARAMETER) {
         fprintf(stderr, " [%s] [resolution %p]", ast->identifier_string, ast->var_res);
     } else if(ast->type == AST_VAR_USE) {
         fprintf(stderr, " [%s] [resolution %p]", ast->identifier_string, ast->var_res);

@@ -497,6 +497,13 @@ void type_propogate(AST *ast) {
 
         xcc_assert(ast->nodes[0]->value_type);
         ast->value_type = ast->nodes[0]->value_type;
+
+        // AST_PARAMETERs on prototypes don't have a resolution
+        if (ast->var_res) {
+            xcc_assert(!ast->var_res->var_type);
+
+            ast->var_res->var_type = ast->nodes[0]->value_type;
+        }
     } else if (ast->type == AST_TYPE) {
         // TODO: do this better
         xcc_assert(ast->num_nodes == 1);

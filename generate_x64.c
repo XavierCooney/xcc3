@@ -243,6 +243,23 @@ static void generate_add_expression(GenContext *ctx, AST *ast) {
     }
 }
 
+static RegLoc argument_index_to_register(int index) {
+    if(index == 0) {
+        return REG_RDI;
+    } else if(index == 1) {
+        return REG_RSI;
+    } else if(index == 2) {
+        return REG_RDX;
+    } else if(index == 3) {
+        return REG_RCX;
+    } else if(index == 4) {
+        return REG_R8;
+    } else if(index == 5) {
+        return REG_R9;
+    }
+    xcc_assert_not_reached_msg("TODO: implement case for more than 6 args");
+}
+
 static void generate_call_expression(GenContext *ctx, AST *ast) {
     FunctionResolution *res = ast->function_res;
     xcc_assert(res);
@@ -252,25 +269,7 @@ static void generate_call_expression(GenContext *ctx, AST *ast) {
         AST *argument_ast = ast->nodes[i];
         generate_expression(ctx, argument_ast);
 
-        RegLoc arg_reg = REG_LAST;
-
-        if(i == 0) {
-            arg_reg = REG_RDI;
-        } else if(i == 1) {
-            arg_reg = REG_RSI;
-        } else if(i == 2) {
-            arg_reg = REG_RDX;
-        } else if(i == 3) {
-            arg_reg = REG_RCX;
-        } else if(i == 4) {
-            arg_reg = REG_R8;
-        } else if(i == 5) {
-            arg_reg = REG_R9;
-        } else {
-            xcc_assert_not_reached_msg("TODO: implement case for more than 6 args");
-        }
-
-        xcc_assert(arg_reg != REG_LAST);
+        RegLoc arg_reg = argument_index_to_register(i);
         generate_move(argument_ast->pos, value_pos_reg(arg_reg, argument_ast->pos->size));
     }
 
@@ -424,6 +423,20 @@ static void generate_body(GenContext *ctx, AST *ast) {
     }
 }
 
+static void generate_param_loading(AST *ast) {
+    xcc_assert(ast->type == AST_FUNC_DECL_PARAM_LIST);
+
+    for (int i = 0; i < ast->num_nodes; ++i) {
+        AST *param = ast->nodes[i];
+        xcc_assert(param->type == AST_PARAMETER);
+        xcc_assert(param->num_nodes == 1);
+        xcc_assert(param->pos);
+
+        RegLoc arg_reg = argument_index_to_register(i);
+        generate_move(value_pos_reg(arg_reg, param->pos->size), param->pos);
+    }
+}
+
 static void generate_function(AST *ast) {
     xcc_assert(ast->type == AST_FUNCTION);
     xcc_assert(ast->num_nodes == 3);
@@ -455,6 +468,7 @@ static void generate_function(AST *ast) {
     GenContext ctx;
     ctx.reserved_stack_space = stack_space;
 
+    generate_param_loading(ast->nodes[1]);
     generate_body(&ctx, body);
 }
 

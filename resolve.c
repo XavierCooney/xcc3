@@ -126,6 +126,18 @@ static void resolve_var_usage(AST *ast, Resolutions *resolutions) {
     prog_error_ast("variable not found", ast);
 }
 
+static void resolve_parameter(AST *ast, Resolutions *resolutions) {
+    xcc_assert(ast->type == AST_PARAMETER);
+
+    const char *name = ast->identifier_string;
+
+    VariableResolution *new_var_res = append_var_resolution_all(resolutions, name);
+    new_var_res->stack_offset = -1;
+    append_var_resolution_local(resolutions, new_var_res);
+
+    ast->var_res = new_var_res;
+}
+
 static void resolve_recursive(AST *ast, Resolutions *res) {
     if (ast->type == AST_FUNCTION_PROTOTYPE || ast->type == AST_FUNCTION) {
         resolve_func_declaration(ast, res);
@@ -146,6 +158,14 @@ static void resolve_recursive(AST *ast, Resolutions *res) {
     if (ast->type == AST_RETURN_STMT) {
         xcc_assert(res->current_func);
         ast->function_res = res->current_func;
+    }
+
+    if (ast->type == AST_FUNCTION) {
+        // this could also just be moved to the AST_FUNC_DECL_PARAM_LIST param stuff.
+        xcc_assert(ast->nodes[1]->type == AST_FUNC_DECL_PARAM_LIST);
+        for (int i = 0; i < ast->nodes[1]->num_nodes; ++i) {
+            resolve_parameter(ast->nodes[1]->nodes[i], res);
+        }
     }
 
     for (int i = 0; i < ast->num_nodes; ++i) {
