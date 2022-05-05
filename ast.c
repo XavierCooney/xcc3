@@ -26,10 +26,10 @@ AST *ast_new(ASTType type, Token *token) {
     new_ast->unknown_resolution = NULL;
     new_ast->value_type = NULL;
 
-    if(type == AST_BODY) {
+    if (ast_is_block(new_ast)) {
         new_ast->block_max_stack_depth = -1;
     }
-    if(type == AST_FUNCTION || type == AST_FUNCTION_PROTOTYPE || type == AST_CALL || type == AST_RETURN_STMT) {
+    if (type == AST_FUNCTION || type == AST_FUNCTION_PROTOTYPE || type == AST_CALL || type == AST_RETURN_STMT) {
         new_ast->function_res = NULL;
     }
 
@@ -43,7 +43,7 @@ AST *ast_append_new(AST *parent, ASTType type, Token *token) {
 }
 
 bool ast_is_block(AST *ast) {
-    return ast->type == AST_BODY;
+    return ast->type == AST_BODY || ast->type == AST_BLOCK_STATEMENT;
 }
 
 void ast_free(AST *ast) {

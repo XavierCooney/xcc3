@@ -101,6 +101,7 @@ static long long parse_integer_literal_value(Token *token) {
 
 static AST *parse_expression(Parser *parser);
 static AST *parse_statement(Parser *parser);
+static AST *parse_block(Parser *parser, ASTType body_type);
 
 static AST *parse_primary(Parser *parser) {
     if(accept(parser, TOK_INT_LITERAL)) {
@@ -191,6 +192,10 @@ static AST *parse_if(Parser *parser) {
     AST *statement = parse_statement(parser);
     ast_append(if_ast, statement);
 
+    if (accept(parser, TOK_KEYWORD_ELSE)) {
+        ast_append(if_ast, parse_statement(parser));
+    }
+
     return if_ast;
 }
 
@@ -224,6 +229,8 @@ static AST *parse_statement(Parser *parser) {
         expect(parser, TOK_SEMICOLON);
 
         return var_declare_ast;
+    } else if (accept(parser, TOK_OPEN_CURLY)) {
+        return parse_block(parser, AST_BLOCK_STATEMENT);
     } else {
         AST *expression_ast = parse_expression(parser);
         AST *statement_ast = ast_new(AST_STATEMENT_EXPRESSION, expression_ast->main_token);
@@ -233,9 +240,8 @@ static AST *parse_statement(Parser *parser) {
     }
 }
 
-static AST *parse_block(Parser *parser) {
-    AST *body_ast = ast_new(AST_BODY, current_token(parser));
-    expect(parser, TOK_OPEN_CURLY);
+static AST *parse_block(Parser *parser, ASTType body_type) {
+    AST *body_ast = ast_new(body_type, prev_token(parser));
 
     while (!accept(parser, TOK_CLOSE_CURLY)) {
         AST *statement = parse_statement(parser);
@@ -277,7 +283,8 @@ static AST *parse_function(Parser *parser) {
 
     if(just_prototype) return func_ast;
 
-    AST *block_ast = parse_block(parser);
+    expect(parser, TOK_OPEN_CURLY);
+    AST *block_ast = parse_block(parser, AST_BODY);
     ast_append(func_ast, block_ast);
 
     if (!strcmp(func_name_token->contents, "main")) {

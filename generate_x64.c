@@ -112,6 +112,8 @@ static void generate_asm_pos(ValuePosition *pos) {
 }
 
 static void generate_label(int label_num) {
+    xcc_assert(label_num >= 0);
+
     generate_asm_partial(".L");
     generate_asm_integer(label_num);
     generate_asm_partial("");
@@ -423,11 +425,14 @@ static void generate_statement(GenContext *ctx, AST *ast) {
         generate_expression(ctx, ast->nodes[0]);
         // TODO: have a value pos for discarding
     } else if(ast->type == AST_IF) {
-        xcc_assert(ast->num_nodes == 2);
+        xcc_assert(ast->num_nodes == 2 || ast->num_nodes == 3);
+        bool has_else = ast->num_nodes == 3;
 
         generate_expression(ctx, ast->nodes[0]);
 
-        int skip_to_end_label = get_unique_label_num();
+        int skip_to_after_if_label = get_unique_label_num();
+        int skip_to_after_else = has_else ? get_unique_label_num() : -1;
+
         ValuePosition *condition_reg = possibly_move_to_temp(
             ast->nodes[0]->pos, ast->nodes[0]->pos
         );
@@ -442,18 +447,32 @@ static void generate_statement(GenContext *ctx, AST *ast) {
         generate_asm("");
 
         generate_asm_partial("jz ");
-        generate_label(skip_to_end_label);
+        generate_label(skip_to_after_if_label);
         generate_asm("");
 
         generate_statement(ctx, ast->nodes[1]);
+        if (has_else) {
+            generate_asm_partial("jmp ");
+            generate_label(skip_to_after_else);
+            generate_asm("");
+        }
 
-        generate_label(skip_to_end_label);
+        generate_label(skip_to_after_if_label);
         generate_asm(":");
 
+        if (has_else) {
+            generate_statement(ctx, ast->nodes[2]);
+            generate_label(skip_to_after_else);
+            generate_asm(":");
+        }
     } else if(ast->type == AST_VAR_DECLARE) {
         xcc_assert(ast->num_nodes == 2);
         generate_expression(ctx, ast->nodes[1]);
         generate_move(ast->nodes[1]->pos, ast->pos);
+    } else if (ast->type == AST_BLOCK_STATEMENT) {
+        for (int i = 0; i < ast->num_nodes; ++i) {
+            generate_statement(ctx, ast->nodes[i]);
+        }
     } else {
         xcc_assert_not_reached_msg("unknown statement");
     }

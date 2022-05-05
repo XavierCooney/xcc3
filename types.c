@@ -547,8 +547,10 @@ void type_propogate(AST *ast) {
         TYPE_PROPOGATE_RECURSE(ast); // nothing to do here
     } else if (ast->type == AST_BODY) {
         TYPE_PROPOGATE_RECURSE(ast);
+    } else if (ast->type == AST_BLOCK_STATEMENT) {
+        TYPE_PROPOGATE_RECURSE(ast);
     } else if (ast->type == AST_IF) {
-        xcc_assert(ast->num_nodes == 2);
+        xcc_assert(ast->num_nodes == 2 || ast->num_nodes == 3);
         TYPE_PROPOGATE_RECURSE(ast);
 
         if (!is_scalar_type(ast->nodes[0]->value_type)) {
