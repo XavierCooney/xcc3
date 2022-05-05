@@ -168,8 +168,14 @@ static void resolve_recursive(AST *ast, Resolutions *res) {
         }
     }
 
+    int old_number_local_resolutions = res->num_local_var_resolutions;
+
     for (int i = 0; i < ast->num_nodes; ++i) {
         resolve_recursive(ast->nodes[i], res);
+    }
+
+    if (ast_is_block(ast)) {
+        res->num_local_var_resolutions = old_number_local_resolutions;
     }
 
     if(ast->type == AST_FUNCTION_PROTOTYPE || ast->type == AST_FUNCTION) {
