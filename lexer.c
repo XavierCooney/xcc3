@@ -7,6 +7,8 @@ const char *lex_token_type_to_string(TokenType type) {
         case TOK_KEYWORD_CHAR: return "KEYWORD_CHAR";
         case TOK_KEYWORD_VOID: return "KEYWORD_VOID";
         case TOK_KEYWORD_RETURN: return "KEYWORD_RETURN";
+        case TOK_KEYWORD_IF: return "KEYWORD_IF";
+        case TOK_KEYWORD_ELSE: return "KEYWORD_ELSE";
         case TOK_IDENTIFIER: return "IDENTIFIER";
         case TOK_OPEN_PAREN: return "OPEN_PAREN";
         case TOK_CLOSE_PAREN: return "CLOSE_PAREN";
@@ -281,6 +283,8 @@ static void lex_a_token(Lexer *lexer) {
         match_keyword_token(token, "char", TOK_KEYWORD_CHAR);
         match_keyword_token(token, "void", TOK_KEYWORD_VOID);
         match_keyword_token(token, "return", TOK_KEYWORD_RETURN);
+        match_keyword_token(token, "if", TOK_KEYWORD_IF);
+        match_keyword_token(token, "else", TOK_KEYWORD_ELSE);
         return;
     } else if(try_lex_an_integer(lexer)) {
         return;

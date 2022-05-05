@@ -111,6 +111,12 @@ static void generate_asm_pos(ValuePosition *pos) {
     }
 }
 
+static void generate_label(int label_num) {
+    generate_asm_partial(".L");
+    generate_asm_integer(label_num);
+    generate_asm_partial("");
+}
+
 static bool val_pos_is_memory(ValuePosition *a) {
     return a->type == POS_STACK;
 }
@@ -416,6 +422,34 @@ static void generate_statement(GenContext *ctx, AST *ast) {
         xcc_assert(ast->num_nodes == 1);
         generate_expression(ctx, ast->nodes[0]);
         // TODO: have a value pos for discarding
+    } else if(ast->type == AST_IF) {
+        xcc_assert(ast->num_nodes == 2);
+
+        generate_expression(ctx, ast->nodes[0]);
+
+        int skip_to_end_label = get_unique_label_num();
+        ValuePosition *condition_reg = possibly_move_to_temp(
+            ast->nodes[0]->pos, ast->nodes[0]->pos
+        );
+
+        // TODO: always using a test instruction is very inefficent
+        generate_asm_partial("test");
+        generate_size_suffix(ast->nodes[0]->pos->size);
+        generate_asm_partial(" ");
+        generate_asm_pos(condition_reg);
+        generate_asm_partial(", ");
+        generate_asm_pos(condition_reg);
+        generate_asm("");
+
+        generate_asm_partial("jz ");
+        generate_label(skip_to_end_label);
+        generate_asm("");
+
+        generate_statement(ctx, ast->nodes[1]);
+
+        generate_label(skip_to_end_label);
+        generate_asm(":");
+
     } else if(ast->type == AST_VAR_DECLARE) {
         xcc_assert(ast->num_nodes == 2);
         generate_expression(ctx, ast->nodes[1]);

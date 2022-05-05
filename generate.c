@@ -5,6 +5,8 @@
 static FILE *output_stream = NULL;
 static bool has_begun_current_line = false;
 
+int unique_label_num = 0;
+
 #define OUT_STREAM output_stream
 
 static void possibly_generate_indent() {
@@ -45,4 +47,8 @@ void generate_asm(const char *line) {
     possibly_generate_indent();
     fprintf(OUT_STREAM, "%s", line);
     generate_end_of_line();
+}
+
+int get_unique_label_num(void) {
+    return unique_label_num++;
 }

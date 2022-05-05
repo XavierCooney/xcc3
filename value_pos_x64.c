@@ -105,7 +105,8 @@ static void allocate_vals_recursive(AST *ast, AllocationStatus *allocation) {
 
     allocation->temporary_depth = old_temporary_depth;
 
-    // TODO: we also need to make sure of alignment for AST_CALL
+    // TODO: we also need to make sure of alignment for AST_CALL and also
+    // other stuff on the stack.
 
     if (ast_is_block(ast)) {
         allocation->local_var_depth = old_local_var_depth;

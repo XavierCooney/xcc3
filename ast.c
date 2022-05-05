@@ -83,6 +83,8 @@ const char *ast_node_type_to_str(ASTType type) {
         case AST_ASSIGN: return "ASSIGN";
         case AST_CONVERT_TO_BOOL: return "CONVERT_TO_BOOL";
         case AST_CONVERT_TO_INT: return "CONVERT_TO_INT";
+        case AST_IF: return "IF";
+        case AST_BLOCK_STATEMENT: return "BLOCK_STATEMENT";
     }
 
     xcc_assert_not_reached();
