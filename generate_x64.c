@@ -210,10 +210,14 @@ static void generate_binary_arithmetic_expression(GenContext *ctx, AST *ast) {
     ValuePosition *first_arg;
     ValuePosition *second_arg;
 
+    // TODO: swapping args breaks on non-commutative operators, but there's
+    // probably a more efficient
+    bool is_commutative = ast->type == AST_ADD;
+
     if(value_pos_is_same(a, dest)) {
         first_arg = a;
         second_arg = b;
-    } else if(value_pos_is_same(b, dest)) {
+    } else if(value_pos_is_same(b, dest) && is_commutative) {
         first_arg = b;
         second_arg = a;
     } else {
