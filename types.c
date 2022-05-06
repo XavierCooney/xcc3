@@ -362,6 +362,13 @@ static void perform_binary_arithmetic_conversion(AST *parent_expr) {
     parent_expr->value_type = result_type;
 }
 
+static void handle_comparison_operator(AST *parent_expr) {
+    perform_binary_arithmetic_conversion(parent_expr);
+    xcc_assert(parent_expr->value_type);
+    // comparison results are always an int
+    parent_expr->value_type = type_new_int(TYPE_INT, false);
+}
+
 #define TYPE_PROPOGATE_RECURSE(ast) for(int i = 0; i < (ast)->num_nodes; ++i) { type_propogate(ast->nodes[i]); }
 
 void type_propogate(AST *ast) {
@@ -547,6 +554,18 @@ void type_propogate(AST *ast) {
         TYPE_PROPOGATE_RECURSE(ast);
         perform_binary_arithmetic_conversion(ast);
         xcc_assert(ast->value_type != NULL);
+    } else if (ast->type == AST_CMP_LT) {
+        TYPE_PROPOGATE_RECURSE(ast);
+        handle_comparison_operator(ast);
+    } else if (ast->type == AST_CMP_LT_EQ) {
+        TYPE_PROPOGATE_RECURSE(ast);
+        handle_comparison_operator(ast);
+    } else if (ast->type == AST_CMP_GT) {
+        TYPE_PROPOGATE_RECURSE(ast);
+        handle_comparison_operator(ast);
+    } else if (ast->type == AST_CMP_GT_EQ) {
+        TYPE_PROPOGATE_RECURSE(ast);
+        handle_comparison_operator(ast);
     } else if (ast->type == AST_STATEMENT_EXPRESSION) {
         TYPE_PROPOGATE_RECURSE(ast); // nothing to do here
     } else if (ast->type == AST_BODY) {

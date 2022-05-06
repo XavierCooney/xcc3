@@ -85,6 +85,10 @@ const char *ast_node_type_to_str(ASTType type) {
         case AST_CONVERT_TO_INT: return "CONVERT_TO_INT";
         case AST_IF: return "IF";
         case AST_BLOCK_STATEMENT: return "BLOCK_STATEMENT";
+        case AST_CMP_LT: return "CMP_LT";
+        case AST_CMP_GT: return "CMP_GT";
+        case AST_CMP_LT_EQ: return "CMP_LT_EQ";
+        case AST_CMP_GT_EQ: return "CMP_GT_EQ";
     }
 
     xcc_assert_not_reached();

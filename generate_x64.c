@@ -295,6 +295,55 @@ static void generate_multiply_expression(GenContext *ctx, AST *ast) {
     generate_move(multiplication_reg, dest);
 }
 
+static void generate_comparison_expression(GenContext *ctx, AST *ast) {
+    // uses rax!
+    RegLoc comparison_register = REG_RAX;
+
+    xcc_assert(ast->num_nodes == 2);
+
+    generate_expression(ctx, ast->nodes[0]);
+    generate_expression(ctx, ast->nodes[1]);
+
+    ValuePosition *a = ast->nodes[0]->pos;
+    ValuePosition *b = ast->nodes[1]->pos;
+    ValuePosition *dest = ast->pos;
+
+    generate_asm_partial("xorl ");
+    generate_asm_pos(value_pos_reg(comparison_register, 4));
+    generate_asm_partial(", ");
+    generate_asm_pos(value_pos_reg(comparison_register, 4));
+    generate_asm("");
+
+    a = possibly_move_to_temp(a, b);
+    generate_asm_partial("cmp");
+    generate_size_suffix(a->size);
+    generate_asm_partial(" ");
+    generate_asm_pos(a);
+    generate_asm_partial(", ");
+    generate_asm_pos(b);
+    generate_asm("");
+
+    generate_asm_partial("set");
+
+    if (ast->type == AST_CMP_LT) {
+        generate_asm_partial("g");
+    } else if (ast->type == AST_CMP_LT_EQ) {
+        generate_asm_partial("ge");
+    } else if (ast->type == AST_CMP_GT) {
+        generate_asm_partial("l");
+    } else if (ast->type == AST_CMP_GT_EQ) {
+        generate_asm_partial("le");
+    } else {
+        xcc_assert_not_reached();
+    }
+
+    generate_asm_partial(" ");
+    generate_asm_pos(value_pos_reg(comparison_register, 1));
+    generate_asm("");
+
+    generate_move(value_pos_reg(comparison_register, 4), dest);
+}
+
 static RegLoc argument_index_to_register(int index) {
     if(index == 0) {
         return REG_RDI;
@@ -409,6 +458,14 @@ static void generate_expression(GenContext *ctx, AST *ast) {
         generate_binary_arithmetic_expression(ctx, ast);
     } else if (ast->type == AST_MULTIPLY) {
         generate_multiply_expression(ctx, ast);
+    } else if (ast->type == AST_CMP_LT) {
+        generate_comparison_expression(ctx, ast);
+    } else if (ast->type == AST_CMP_GT) {
+        generate_comparison_expression(ctx, ast);
+    } else if (ast->type == AST_CMP_LT_EQ) {
+        generate_comparison_expression(ctx, ast);
+    } else if (ast->type == AST_CMP_GT_EQ) {
+        generate_comparison_expression(ctx, ast);
     } else if (ast->type == AST_CALL) {
         generate_call_expression(ctx, ast);
     } else if (ast->type == AST_VAR_USE) {

@@ -174,9 +174,55 @@ static AST *parse_additive(Parser *parser) {
     return a;
 }
 
+static AST *parse_comparison(Parser *parser) {
+    AST *a = parse_additive(parser);
+
+    int number_chained = 0;
+
+    while (accept(parser, TOK_LT) || accept(parser, TOK_GT) ||
+            accept(parser, TOK_LT_OR_EQ) || accept(parser, TOK_GT_OR_EQ)) {
+
+        if (number_chained >= 1) {
+            // TODO: this should technically be a warning, but I don't have
+            // the code for that yet, so I'll do an error
+            parse_error(parser, "sus chaining of comparison operators");
+        }
+
+        Token *comparison_token = prev_token(parser);
+        TokenType token_type = comparison_token->type;
+        ASTType ast_type;
+
+        if (token_type == TOK_LT) {
+            ast_type = AST_CMP_LT;
+        } else if (token_type == TOK_GT) {
+            ast_type = AST_CMP_GT;
+        } else if (token_type == TOK_LT_OR_EQ) {
+            ast_type = AST_CMP_LT_EQ;
+        } else if (token_type == TOK_GT_OR_EQ) {
+            ast_type = AST_CMP_GT_EQ;
+        } else {
+            xcc_assert_not_reached();
+        }
+
+        AST *comparison_ast = ast_new(ast_type, comparison_token);
+
+        AST *b = parse_additive(parser);
+
+        ast_append(comparison_ast, a);
+        ast_append(comparison_ast, b);
+
+        a = comparison_ast;
+
+        number_chained++;
+    }
+
+    return a;
+}
+
 static AST *parse_assignment(Parser *parser) {
     // technically this is not to-spec but in that case it's probably not an lvalue anyway
-    AST *a = parse_additive(parser);
+    // this is also apparently how many other compilers work
+    AST *a = parse_comparison(parser);
 
     if (accept(parser, TOK_EQUALS)) {
         AST *assignment_ast = ast_new(AST_ASSIGN, prev_token(parser));

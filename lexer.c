@@ -25,6 +25,10 @@ const char *lex_token_type_to_string(TokenType type) {
         case TOK_PERCENT: return "PERCENT";
         case TOK_EOF: return "EOF";
         case TOK_UNKNOWN: return "UNKNOWN";
+        case TOK_LT: return "LT";
+        case TOK_LT_OR_EQ: return "LT_OR_EQ";
+        case TOK_GT: return "GT";
+        case TOK_GT_OR_EQ: return "GT_OR_EQ";
     }
 
     return "INVALID";
@@ -199,6 +203,20 @@ static Token *try_lex_a_char(Lexer *lexer, TokenType type, char c) {
     return NULL;
 }
 
+static Token *try_lex_a_string(Lexer *lexer, TokenType type, const char *s) {
+    int i = 0;
+
+    while (s[i] != '\0') {
+        if (lexer->source[lexer->index + i] != s[i]) {
+            return NULL;
+        }
+
+        i++;
+    }
+
+    return accept_token(lexer, type, i);
+}
+
 static bool char_can_be_in_ident(char c, int index) {
     bool condition = ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || c == '_';
     if(index > 0) {
@@ -253,32 +271,40 @@ static bool current_char_is_whitespace(Lexer *lexer) {
 static void lex_a_token(Lexer *lexer) {
     Token *token;
 
-    if(try_lex_a_char(lexer, TOK_OPEN_PAREN, '(')) {
+    if (try_lex_a_char(lexer, TOK_OPEN_PAREN, '(')) {
         return;
-    } else if(try_lex_a_char(lexer, TOK_CLOSE_PAREN, ')')) {
+    } else if (try_lex_a_char(lexer, TOK_CLOSE_PAREN, ')')) {
         return;
-    } else if(try_lex_a_char(lexer, TOK_OPEN_CURLY, '{')) {
+    } else if (try_lex_a_char(lexer, TOK_OPEN_CURLY, '{')) {
         return;
-    } else if(try_lex_a_char(lexer, TOK_CLOSE_CURLY, '}')) {
+    } else if (try_lex_a_char(lexer, TOK_CLOSE_CURLY, '}')) {
         return;
-    } else if(try_lex_a_char(lexer, TOK_SEMICOLON, ';')) {
+    } else if (try_lex_a_char(lexer, TOK_SEMICOLON, ';')) {
         return;
-    } else if(try_lex_a_char(lexer, TOK_COMMA, ',')) {
+    } else if (try_lex_a_char(lexer, TOK_COMMA, ',')) {
         return;
-    } else if(try_lex_a_char(lexer, TOK_PLUS, '+')) {
+    } else if (try_lex_a_char(lexer, TOK_PLUS, '+')) {
         return;
-    } else if(try_lex_a_char(lexer, TOK_MINUS, '-')) {
+    } else if (try_lex_a_char(lexer, TOK_MINUS, '-')) {
         return;
-    } else if(try_lex_a_char(lexer, TOK_STAR, '*')) {
+    } else if (try_lex_a_char(lexer, TOK_STAR, '*')) {
         return;
-    } else if(try_lex_a_char(lexer, TOK_PERCENT, '%')) {
+    } else if (try_lex_a_char(lexer, TOK_PERCENT, '%')) {
         return;
-    } else if(try_lex_a_char(lexer, TOK_EQUALS, '=')) {
+    } else if (try_lex_a_char(lexer, TOK_EQUALS, '=')) {
         return;
-    } else if(current_char_is_whitespace(lexer)) {
+    } else if (try_lex_a_string(lexer, TOK_LT_OR_EQ, "<=")) {
+        return;
+    } else if (try_lex_a_string(lexer, TOK_GT_OR_EQ, ">=")) {
+        return;
+    } else if (try_lex_a_char(lexer, TOK_LT, '<')) {
+        return;
+    } else if (try_lex_a_char(lexer, TOK_GT, '>')) {
+        return;
+    } else if (current_char_is_whitespace(lexer)) {
         advance_one_char(lexer);
         return;
-    } else if((token = try_lex_an_identifier(lexer))) {
+    } else if ((token = try_lex_an_identifier(lexer))) {
         match_keyword_token(token, "int", TOK_KEYWORD_INT);
         match_keyword_token(token, "char", TOK_KEYWORD_CHAR);
         match_keyword_token(token, "void", TOK_KEYWORD_VOID);
@@ -286,11 +312,11 @@ static void lex_a_token(Lexer *lexer) {
         match_keyword_token(token, "if", TOK_KEYWORD_IF);
         match_keyword_token(token, "else", TOK_KEYWORD_ELSE);
         return;
-    } else if(try_lex_an_integer(lexer)) {
+    } else if (try_lex_an_integer(lexer)) {
         return;
-    } else if(try_lex_a_comment(lexer)) {
+    } else if (try_lex_a_comment(lexer)) {
         return;
-    } else if(try_lex_a_char(lexer, TOK_SLASH, '/')) {
+    } else if (try_lex_a_char(lexer, TOK_SLASH, '/')) {
         return;
     } else {
         // Just to prevent an infinite loop...
