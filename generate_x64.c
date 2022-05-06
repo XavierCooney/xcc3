@@ -211,7 +211,7 @@ static void generate_binary_arithmetic_expression(GenContext *ctx, AST *ast) {
     ValuePosition *second_arg;
 
     // TODO: swapping args breaks on non-commutative operators, but there's
-    // probably a more efficient
+    // probably a more efficient workaround
     bool is_commutative = ast->type == AST_ADD;
 
     if(value_pos_is_same(a, dest)) {
@@ -231,6 +231,7 @@ static void generate_binary_arithmetic_expression(GenContext *ctx, AST *ast) {
     } else if (ast->type == AST_SUBTRACT) {
         opcode = "sub";
     }
+
     xcc_assert(opcode);
 
     if(first_arg && second_arg) {
@@ -261,6 +262,37 @@ static void generate_binary_arithmetic_expression(GenContext *ctx, AST *ast) {
 
         generate_move(temp_reg_a, dest);
     }
+}
+
+static void generate_multiply_expression(GenContext *ctx, AST *ast) {
+    // We need a separate function for this becomes it seems multiplication
+    // only works with certain registers?
+
+    xcc_assert(ast->num_nodes == 2);
+
+    generate_expression(ctx, ast->nodes[0]);
+    generate_expression(ctx, ast->nodes[1]);
+
+    ValuePosition *a = ast->nodes[0]->pos;
+    ValuePosition *b = ast->nodes[1]->pos;
+    ValuePosition *dest = ast->pos;
+
+    // TODO: where stuff is eventually properly allocated to registers
+    // rather than all on the stack, there should be a way of indicating
+    // which instructions will use up RAX and other registers.
+
+    ValuePosition *multiplication_reg = value_pos_reg(REG_RAX, dest->size);
+
+    generate_move(a, multiplication_reg);
+    generate_asm_partial("imul");
+    generate_size_suffix(dest->size);
+    generate_asm_partial(" ");
+    generate_asm_pos(b);
+    generate_asm_partial(", ");
+    generate_asm_pos(multiplication_reg);
+    generate_asm("");
+
+    generate_move(multiplication_reg, dest);
 }
 
 static RegLoc argument_index_to_register(int index) {
@@ -375,6 +407,8 @@ static void generate_expression(GenContext *ctx, AST *ast) {
         generate_binary_arithmetic_expression(ctx, ast);
     } else if (ast->type == AST_SUBTRACT) {
         generate_binary_arithmetic_expression(ctx, ast);
+    } else if (ast->type == AST_MULTIPLY) {
+        generate_multiply_expression(ctx, ast);
     } else if (ast->type == AST_CALL) {
         generate_call_expression(ctx, ast);
     } else if (ast->type == AST_VAR_USE) {

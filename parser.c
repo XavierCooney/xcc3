@@ -104,7 +104,11 @@ static AST *parse_statement(Parser *parser);
 static AST *parse_block(Parser *parser, ASTType body_type);
 
 static AST *parse_primary(Parser *parser) {
-    if(accept(parser, TOK_INT_LITERAL)) {
+    if(accept(parser, TOK_OPEN_PAREN)) {
+        AST *expr = parse_expression(parser);
+        expect(parser, TOK_CLOSE_PAREN);
+        return expr;
+    } else if(accept(parser, TOK_INT_LITERAL)) {
         Token *literal_token = prev_token(parser);
         AST *literal_ast = ast_new(AST_INTEGER_LITERAL, literal_token);
         literal_ast->integer_literal_val = parse_integer_literal_value(literal_token);
@@ -137,13 +141,25 @@ static AST *parse_primary(Parser *parser) {
 static AST *parse_multiplicative(Parser *parser) {
     AST *a = parse_primary(parser);
 
+    while (accept(parser, TOK_STAR) || accept(parser, TOK_SLASH)) {
+        Token *token = prev_token(parser);
+
+        AST *b = parse_primary(parser);
+
+        ASTType ast_type = token->type == TOK_STAR ? AST_MULTIPLY : AST_DIVIDE;
+        AST *add_ast = ast_new(ast_type, token);
+        ast_append(add_ast, a);
+        ast_append(add_ast, b);
+        a = add_ast;
+    }
+
     return a;
 }
 
 static AST *parse_additive(Parser *parser) {
     AST *a = parse_multiplicative(parser);
 
-    while(accept(parser, TOK_PLUS) || accept(parser, TOK_MINUS)) {
+    while (accept(parser, TOK_PLUS) || accept(parser, TOK_MINUS)) {
         Token *token = prev_token(parser);
 
         AST *b = parse_multiplicative(parser);
@@ -162,7 +178,7 @@ static AST *parse_assignment(Parser *parser) {
     // technically this is not to-spec but in that case it's probably not an lvalue anyway
     AST *a = parse_additive(parser);
 
-    if(accept(parser, TOK_EQUALS)) {
+    if (accept(parser, TOK_EQUALS)) {
         AST *assignment_ast = ast_new(AST_ASSIGN, prev_token(parser));
         // The call to parse_assignment rather than parse_additive
         // here allows assignment to be right associative

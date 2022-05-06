@@ -12,7 +12,8 @@ static bool is_expression_node(AST *ast) {
     int is_expression = t == AST_INTEGER_LITERAL || t == AST_CALL;
     is_expression = is_expression || t == AST_VAR_USE || t == AST_ASSIGN;
     is_expression = is_expression || t == AST_CONVERT_TO_INT || t == AST_CONVERT_TO_BOOL;
-    is_expression = is_expression || t == AST_ADD || t == AST_SUBTRACT;
+    is_expression = is_expression || t == AST_ADD || t == AST_SUBTRACT || t == AST_MULTIPLY;
+    is_expression = is_expression || t == AST_DIVIDE;
 
     if (is_expression) {
         xcc_assert(ast->value_type != NULL);
