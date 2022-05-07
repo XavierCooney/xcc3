@@ -84,6 +84,7 @@ const char *ast_node_type_to_str(ASTType type) {
         case AST_CONVERT_TO_BOOL: return "CONVERT_TO_BOOL";
         case AST_CONVERT_TO_INT: return "CONVERT_TO_INT";
         case AST_IF: return "IF";
+        case AST_WHILE: return "WHILE";
         case AST_BLOCK_STATEMENT: return "BLOCK_STATEMENT";
         case AST_CMP_LT: return "CMP_LT";
         case AST_CMP_GT: return "CMP_GT";

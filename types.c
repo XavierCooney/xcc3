@@ -579,6 +579,13 @@ void type_propogate(AST *ast) {
         if (!is_scalar_type(ast->nodes[0]->value_type)) {
             prog_error_ast("if condition needs scalar type!", ast);
         }
+    } else if (ast->type == AST_WHILE) {
+        xcc_assert(ast->num_nodes == 2);
+        TYPE_PROPOGATE_RECURSE(ast);
+
+        if (!is_scalar_type(ast->nodes[0]->value_type)) {
+            prog_error_ast("while condition needs scalar type!", ast);
+        }
     } else {
         xcc_assert_not_reached_msg("AST type not handled in type propogator!");
     }

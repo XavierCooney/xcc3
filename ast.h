@@ -20,7 +20,7 @@ typedef enum {
 
     AST_CALL,
 
-    AST_IF, AST_BLOCK_STATEMENT
+    AST_IF, AST_WHILE, AST_BLOCK_STATEMENT
 } ASTType;
 
 struct AST;

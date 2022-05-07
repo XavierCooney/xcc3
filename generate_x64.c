@@ -196,6 +196,7 @@ static void generate_integer_literal_expression(AST *ast) {
 }
 
 static void generate_expression(GenContext *ctx, AST *ast);
+static void generate_statement(GenContext *ctx, AST *ast);
 
 static void generate_binary_arithmetic_expression(GenContext *ctx, AST *ast) {
     xcc_assert(ast->num_nodes == 2);
@@ -495,6 +496,88 @@ static void generate_expression(GenContext *ctx, AST *ast) {
     }
 }
 
+static void generate_if(GenContext *ctx, AST *ast) {
+    xcc_assert(ast->type == AST_IF);
+    xcc_assert(ast->num_nodes == 2 || ast->num_nodes == 3);
+    bool has_else = ast->num_nodes == 3;
+
+    generate_expression(ctx, ast->nodes[0]);
+
+    int skip_to_after_if_label = get_unique_label_num();
+    int skip_to_after_else = has_else ? get_unique_label_num() : -1;
+
+    ValuePosition *condition_reg = possibly_move_to_temp(
+        ast->nodes[0]->pos, ast->nodes[0]->pos
+    );
+
+    // TODO: always using a test instruction is very inefficent
+    generate_asm_partial("test");
+    generate_size_suffix(ast->nodes[0]->pos->size);
+    generate_asm_partial(" ");
+    generate_asm_pos(condition_reg);
+    generate_asm_partial(", ");
+    generate_asm_pos(condition_reg);
+    generate_asm("");
+
+    generate_asm_partial("jz ");
+    generate_label(skip_to_after_if_label);
+    generate_asm("");
+
+    generate_statement(ctx, ast->nodes[1]);
+    if (has_else) {
+        generate_asm_partial("jmp ");
+        generate_label(skip_to_after_else);
+        generate_asm("");
+    }
+
+    generate_label(skip_to_after_if_label);
+    generate_asm(":");
+
+    if (has_else) {
+        generate_statement(ctx, ast->nodes[2]);
+        generate_label(skip_to_after_else);
+        generate_asm(":");
+    }
+}
+
+static void generate_while(GenContext *ctx, AST *ast) {
+    xcc_assert(ast->type == AST_WHILE);
+    xcc_assert(ast->num_nodes == 2);
+
+    int beginning_label = get_unique_label_num();
+    int end_label = get_unique_label_num();
+
+    generate_label(beginning_label);
+    generate_asm(":");
+
+    generate_expression(ctx, ast->nodes[0]);
+    ValuePosition *condition_reg = possibly_move_to_temp(
+        ast->nodes[0]->pos, ast->nodes[0]->pos
+    );
+
+    // TODO: always using a test instruction is very inefficent
+    generate_asm_partial("test");
+    generate_size_suffix(ast->nodes[0]->pos->size);
+    generate_asm_partial(" ");
+    generate_asm_pos(condition_reg);
+    generate_asm_partial(", ");
+    generate_asm_pos(condition_reg);
+    generate_asm("");
+
+    generate_asm_partial("jz ");
+    generate_label(end_label);
+    generate_asm("");
+
+    generate_statement(ctx, ast->nodes[1]);
+
+    generate_asm_partial("jmp ");
+    generate_label(beginning_label);
+    generate_asm("");
+
+    generate_label(end_label);
+    generate_asm(":");
+}
+
 static void generate_statement(GenContext *ctx, AST *ast) {
     if(ast->type == AST_RETURN_STMT) {
         xcc_assert(ast->num_nodes <= 1);
@@ -520,46 +603,9 @@ static void generate_statement(GenContext *ctx, AST *ast) {
         generate_expression(ctx, ast->nodes[0]);
         // TODO: have a value pos for discarding
     } else if(ast->type == AST_IF) {
-        xcc_assert(ast->num_nodes == 2 || ast->num_nodes == 3);
-        bool has_else = ast->num_nodes == 3;
-
-        generate_expression(ctx, ast->nodes[0]);
-
-        int skip_to_after_if_label = get_unique_label_num();
-        int skip_to_after_else = has_else ? get_unique_label_num() : -1;
-
-        ValuePosition *condition_reg = possibly_move_to_temp(
-            ast->nodes[0]->pos, ast->nodes[0]->pos
-        );
-
-        // TODO: always using a test instruction is very inefficent
-        generate_asm_partial("test");
-        generate_size_suffix(ast->nodes[0]->pos->size);
-        generate_asm_partial(" ");
-        generate_asm_pos(condition_reg);
-        generate_asm_partial(", ");
-        generate_asm_pos(condition_reg);
-        generate_asm("");
-
-        generate_asm_partial("jz ");
-        generate_label(skip_to_after_if_label);
-        generate_asm("");
-
-        generate_statement(ctx, ast->nodes[1]);
-        if (has_else) {
-            generate_asm_partial("jmp ");
-            generate_label(skip_to_after_else);
-            generate_asm("");
-        }
-
-        generate_label(skip_to_after_if_label);
-        generate_asm(":");
-
-        if (has_else) {
-            generate_statement(ctx, ast->nodes[2]);
-            generate_label(skip_to_after_else);
-            generate_asm(":");
-        }
+        generate_if(ctx, ast);
+    } else if(ast->type == AST_WHILE) {
+        generate_while(ctx, ast);
     } else if(ast->type == AST_VAR_DECLARE) {
         xcc_assert(ast->num_nodes == 2);
         generate_expression(ctx, ast->nodes[1]);

@@ -261,6 +261,20 @@ static AST *parse_if(Parser *parser) {
     return if_ast;
 }
 
+static AST *parse_while(Parser *parser) {
+    AST *while_ast = ast_new(AST_WHILE, prev_token(parser));
+
+    expect(parser, TOK_OPEN_PAREN);
+    AST *condition_expression = parse_expression(parser);
+    ast_append(while_ast, condition_expression);
+    expect(parser, TOK_CLOSE_PAREN);
+
+    AST *statement = parse_statement(parser);
+    ast_append(while_ast, statement);
+
+    return while_ast;
+}
+
 static AST *parse_statement(Parser *parser) {
     Token *first_token = current_token(parser);
     AST *ast_type;
@@ -275,6 +289,8 @@ static AST *parse_statement(Parser *parser) {
         return return_ast;
     } else if (accept(parser, TOK_KEYWORD_IF)) {
         return parse_if(parser);
+    } else if (accept(parser, TOK_KEYWORD_WHILE)) {
+        return parse_while(parser);
     } else if ((ast_type = accept_type(parser))) {
         // TODO: actually properly parse declarations...
         Token *var_name_token = expect(parser, TOK_IDENTIFIER);
