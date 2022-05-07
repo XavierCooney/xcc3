@@ -29,7 +29,7 @@ typedef enum {
     TOK_LT, TOK_LT_OR_EQ, TOK_GT, TOK_GT_OR_EQ
 } TokenType;
 
-typedef struct {
+typedef struct Token {
     TokenType type;
 
     const char *contents;
@@ -41,7 +41,17 @@ typedef struct {
 
     const char *start_of_line;
     const char *source_filename;
+
+    struct Token *alternative_source_token;
 } Token;
+
+typedef struct PreprocessorMacro {
+    const char *name;
+    Token *contents;
+    int number_tokens;
+
+    struct PreprocessorMacro *next_macro;
+} PreprocessorMacro;
 
 typedef struct {
     size_t num_tokens;
@@ -54,8 +64,11 @@ typedef struct {
 
     int current_line_num;
     int current_col_num;
+    bool seen_nonwhitespace_on_line;
     const char *current_start_of_line_char;
     const char *source_filename;
+
+    PreprocessorMacro *macros;
 } Lexer;
 
 const char *lex_token_type_to_string(TokenType type);

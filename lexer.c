@@ -1,5 +1,8 @@
 #include "xcc.h"
 
+static void lex_a_token(Lexer *lexer);
+static void retract_token(Lexer *lexer);
+// static void retract_tokens(Lexer *lexer, int old_num);
 
 const char *lex_token_type_to_string(TokenType type) {
     switch(type) {
@@ -62,7 +65,7 @@ void lex_print_source_with_token_range(Token *start, Token *end) {
 
     // TODO: actually use `end`
     fprintf(
-        stderr, "    At \"%s:%d:%d\": (",
+        stderr, "    Near \"%s:%d:%d\": (",
         start->source_filename, start->source_line_num,
         start->source_column_num
     );
@@ -112,6 +115,13 @@ void lex_print_source_with_token_range(Token *start, Token *end) {
         fprintf(stderr, "\033[0m");
     }
     fprintf(stderr, "\n");
+
+    Token *alt_token = start->alternative_source_token;
+
+    if (alt_token) {
+        printf("Expanded from\n");
+        lex_print_source_with_token_range(alt_token, alt_token);
+    }
 }
 
 static Token *append_empty_token(Lexer *lexer) {
@@ -121,6 +131,10 @@ static Token *append_empty_token(Lexer *lexer) {
         tokens, new_token
     );
     return new_token;
+}
+
+static bool is_char_whitespace(char c) {
+    return c == ' ' || c == '\n' || c == '\r' || c == '\t';
 }
 
 static void advance_one_char(Lexer *lexer) {
@@ -135,7 +149,11 @@ static void advance_one_char(Lexer *lexer) {
         ++lexer->current_line_num;
         lexer->current_start_of_line_char = &lexer->source[lexer->index];
         lexer->current_col_num = 1;
+        lexer->seen_nonwhitespace_on_line = false;
     } else {
+        if (!is_char_whitespace(c)) {
+            lexer->seen_nonwhitespace_on_line = true;
+        }
         ++lexer->current_col_num;
     }
 }
@@ -152,6 +170,7 @@ static Token *accept_token(Lexer *lexer, TokenType type, int tok_length) {
     new_token->start_of_line = lexer->current_start_of_line_char;
     new_token->source_filename = lexer->source_filename;
     new_token->type = type;
+    new_token->alternative_source_token = NULL;
 
     for(int i = 0; i < tok_length; ++i) {
         new_contents[i] = lexer->source[lexer->index];
@@ -166,11 +185,35 @@ static void free_token(Token *token) {
     xcc_free(token->contents);
 }
 
+static void retract_token(Lexer *lexer) {
+    free_token(&lexer->tokens[lexer->num_tokens - 1]);
+    lexer->num_tokens--;
+}
+
+// static void retract_tokens(Lexer *lexer, int old_num) {
+//     xcc_assert(lexer->num_tokens >= old_num);
+//     while (lexer->num_tokens > old_num) {
+//         retract_token(lexer);
+//     }
+// }
+
 void lex_free_lexer(Lexer *lexer) {
-    for(int i = 0; i < lexer->num_tokens; ++i) {
+    for (int i = 0; i < lexer->num_tokens; ++i) {
         free_token(&lexer->tokens[i]);
     }
-    if(lexer->tokens) xcc_free(lexer->tokens);
+    if (lexer->tokens) xcc_free(lexer->tokens);
+
+    while (lexer->macros) {
+        PreprocessorMacro *old_macro = lexer->macros;
+        lexer->macros = lexer->macros->next_macro;
+
+        for (int i = 0; i < old_macro->number_tokens; ++i) {
+            free_token(&old_macro->contents[i]);
+        }
+        xcc_free(old_macro->contents);
+        xcc_free(old_macro->name);
+        xcc_free(old_macro);
+    }
 
     xcc_free(lexer->source);
     xcc_free(lexer->source_filename);
@@ -264,14 +307,139 @@ static void match_keyword_token(Token *token, const char *match, TokenType type)
 }
 
 static bool current_char_is_whitespace(Lexer *lexer) {
-    char c = lexer->source[lexer->index];
-    return c == ' ' || c == '\n' || c == '\r' || c == '\t';
+    return is_char_whitespace(lexer->source[lexer->index]);
+}
+
+static void try_lex_comments_and_whitespace(Lexer *lexer, bool allow_newlines) {
+    do {
+        while (current_char_is_whitespace(lexer)) {
+            if (!allow_newlines && lexer->source[lexer->index] == '\n') {
+                break;
+            }
+            advance_one_char(lexer);
+        }
+    } while (try_lex_a_comment(lexer));
+}
+
+static void lexing_error(Lexer *lexer, const char *msg) {
+    if (lexer->num_tokens != 0) {
+        prog_error(msg, &lexer->tokens[lexer->num_tokens - 1]);
+    } else {
+        Token *empty_token = accept_token(lexer, TOK_UNKNOWN, 0);
+        prog_error(msg, empty_token);
+    }
+}
+
+static void handle_define_preprocessor(Lexer *lexer) {
+    Token *macro_name_token = try_lex_an_identifier(lexer);
+
+    if (!macro_name_token) {
+        lexing_error(lexer, "expected macro after #define");
+    }
+
+    char *macro_name_buffer = xcc_malloc(strlen(macro_name_token->contents + 1));
+    strcpy(macro_name_buffer, macro_name_token->contents);
+
+    retract_token(lexer);
+
+    try_lex_comments_and_whitespace(lexer, false);
+
+    int old_num_tokens = lexer->num_tokens;
+
+    while (lexer->source[lexer->index] != '\n' && lexer->source[lexer->index] != '\0') {
+        lex_a_token(lexer);
+    }
+    advance_one_char(lexer);
+
+    int total_tokens = lexer->num_tokens - old_num_tokens;
+    Token *token_buffer = xcc_malloc(sizeof(Token) * total_tokens);
+    memcpy(token_buffer, &lexer->tokens[old_num_tokens], total_tokens * sizeof(Token));
+
+    PreprocessorMacro *new_macro = xcc_malloc(sizeof(PreprocessorMacro));
+    new_macro->name = macro_name_buffer;
+    new_macro->contents = token_buffer;
+    new_macro->number_tokens = total_tokens;
+    new_macro->next_macro = lexer->macros;
+    lexer->macros = new_macro;
+
+    // retract_tokens(lexer, old_num_tokens);
+    // Don't retract_tokens because we jusy copy
+    // the contents pointers, so that'll get freed
+    // later
+    lexer->num_tokens = old_num_tokens;
+}
+
+static bool try_lex_a_preprocessor(Lexer *lexer) {
+    if (lexer->source[lexer->index] != '#') return false;
+    advance_one_char(lexer);
+
+    if (lexer->source[lexer->index] == '\n' || lexer->source[lexer->index] == '\0') {
+        // null directive, apparently it's a thing
+        advance_one_char(lexer);
+        return true;
+    }
+
+    Token *command_token = try_lex_an_identifier(lexer);
+    if (!command_token) {
+        lexing_error(lexer, "expected prepocessor command");
+    }
+
+    try_lex_comments_and_whitespace(lexer, false);
+
+    if (strcmp(command_token->contents, "define") == 0) {
+        retract_token(lexer);
+        handle_define_preprocessor(lexer);
+    } else {
+        // TODO: handle more preprocessor commands
+        prog_error("unknown preprocessor command", command_token);
+    }
+
+    return true;
+}
+
+static bool potentially_match_macro(Lexer *lexer, Token *ident_token) {
+    PreprocessorMacro *macro = lexer->macros;
+
+    while (macro && strcmp(ident_token->contents, macro->name) != 0) {
+        macro = macro->next_macro;
+    }
+
+    if (!macro) return false;
+
+    Token ident_token_copy;
+    memcpy(&ident_token_copy, ident_token, sizeof(Token));
+
+    retract_token(lexer); // remove lexed identifier token
+
+    for (int i = 0; i < macro->number_tokens; ++i) {
+        Token *old_token = &macro->contents[i];
+        Token *new_token = append_empty_token(lexer);
+
+        // memcpy(new_token, old_token, sizeof(Token));
+
+        char *new_contents = xcc_malloc(old_token->contents_length + 1);
+        strcpy(new_contents, old_token->contents);
+        new_token->contents = new_contents;
+        new_token->contents_length = old_token->contents_length;
+        new_token->source_column_num = ident_token->source_column_num;
+        new_token->source_filename = ident_token->source_filename;
+        new_token->source_length = ident_token->source_length;
+        new_token->source_line_num = ident_token->source_line_num;
+        new_token->start_of_line = ident_token->start_of_line;
+        new_token->type = old_token->type;
+
+        new_token->alternative_source_token = old_token;
+    }
+
+    return true;
 }
 
 static void lex_a_token(Lexer *lexer) {
     Token *token;
 
-    if (try_lex_a_char(lexer, TOK_OPEN_PAREN, '(')) {
+    if (try_lex_a_preprocessor(lexer)) {
+        return;
+    } else if (try_lex_a_char(lexer, TOK_OPEN_PAREN, '(')) {
         return;
     } else if (try_lex_a_char(lexer, TOK_CLOSE_PAREN, ')')) {
         return;
@@ -305,6 +473,10 @@ static void lex_a_token(Lexer *lexer) {
         advance_one_char(lexer);
         return;
     } else if ((token = try_lex_an_identifier(lexer))) {
+        if (potentially_match_macro(lexer, token)) {
+            return;
+        }
+
         match_keyword_token(token, "int", TOK_KEYWORD_INT);
         match_keyword_token(token, "char", TOK_KEYWORD_CHAR);
         match_keyword_token(token, "void", TOK_KEYWORD_VOID);
@@ -337,6 +509,7 @@ static Lexer *lex_source(const char *source, const char *filename) {
 
     lexer->current_col_num = 1;
     lexer->current_line_num = 1;
+    lexer->seen_nonwhitespace_on_line = false;
     lexer->current_start_of_line_char = lexer->source;
 
     char *source_filename_buf = xcc_malloc(strlen(filename) + 1); // TODO: xcc_strdup
@@ -346,6 +519,7 @@ static Lexer *lex_source(const char *source, const char *filename) {
     lexer->num_tokens = 0;
     lexer->num_tokens_allocated = 0;
     lexer->tokens = NULL;
+    lexer->macros = NULL;
 
     while(lexer->index != lexer->source_length) {
         lex_a_token(lexer);
