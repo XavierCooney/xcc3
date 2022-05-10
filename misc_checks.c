@@ -1,7 +1,12 @@
 #include "xcc.h"
 
 static bool is_lvalue(AST *ast) {
-    return ast->type == AST_IDENT_USE;
+    if (ast->type == AST_IDENT_USE) {
+        if (ast->declaration->decl_type == DECL_FUNC_PROTOTYPE) return false;
+        return true;
+    }
+
+    return false;
 }
 
 void check_lvalue(AST *ast) {

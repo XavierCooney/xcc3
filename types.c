@@ -106,6 +106,16 @@ static bool is_type_qualified(Type *type) {
     return type->is_const || type->is_volatile || type->is_restrict;
 }
 
+static bool is_type_complete(Type *type) {
+    if (type->type_type == TYPE_INTEGER) {
+        return true;
+    } else if (type->type_type == TYPE_VOID) {
+        return false;
+    } else {
+        xcc_assert_not_reached();
+    }
+}
+
 static Type *make_unqualified_type(Type *type) {
     if (is_type_qualified(type)) {
         if (type->type_type == TYPE_VOID) {
@@ -594,9 +604,18 @@ static void handle_declarator_group(AST *ast) {
     type_propogate(ast->nodes[0]);
 
     xcc_assert(ast->declaration->type);
+    DeclarationType decl_type = ast->declaration->decl_type;
+    if (decl_type == DECL_LOCAL_VAR || decl_type == DECL_GLOBAL_VAR || decl_type == DECL_PARAM_TYPE) {
+        if (!is_type_complete(ast->declaration->type)) {
+            prog_error_ast("declaration with incomplete type", ast);
+        }
+    }
 
     if (ast->num_nodes == 2) {
         // has initialiser
+        if (decl_type != DECL_LOCAL_VAR && decl_type != DECL_GLOBAL_VAR) {
+            prog_error_ast("cannot initialise with this declaration", ast);
+        }
         type_propogate(ast->nodes[1]);
         implicitly_convert(&ast->nodes[1], ast->declaration->type);
     }
