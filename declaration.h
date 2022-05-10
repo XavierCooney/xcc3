@@ -28,6 +28,7 @@ typedef struct {
     Declaration **local_declarations;
 
     AST *current_func;
+    Declaration *current_func_declaration;
 } ResolutionList;
 
 ResolutionList *resolve_declarations(AST *program);

@@ -3,7 +3,7 @@ parts = xcc lexer ast parser declaration types misc_checks value_pos_x64 generat
 object_files = $(addsuffix .o,$(addprefix build/,$(parts)))
 source_files = $(addsuffix .c,$(parts))
 header_files = *.h
-cflags = -fsanitize=undefined -Wall -Werror -ggdb -Wno-format-zero-length -Wno-unused-function
+cflags = -fsanitize=undefined -Wall -Werror -ggdb -Wno-format-zero-length
 
 .PHONY: all
 all: xcc

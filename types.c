@@ -160,6 +160,25 @@ static bool types_are_compatible(Type *t, Type *u) {
         return t->array_size == u->array_size && types_are_compatible(t->underlying, u->underlying);
     }
 
+    if (has_same_type_type && t->type_type == TYPE_FUNCTION) {
+        if (t->array_size != u->array_size) {
+            return false;
+        }
+
+        if (!types_are_compatible(t->underlying, u->underlying)) {
+            return false;
+        }
+
+        for (int i = 0; i < t->array_size; ++i) {
+            if (!types_are_compatible(t->function_param_types[i], u->function_param_types[i])) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+
     if (has_same_type_type && t->type_type == TYPE_STRUCT) {
         xcc_assert_not_reached();
     }
@@ -569,7 +588,7 @@ static void handle_declarator_group(AST *ast) {
     xcc_assert(ast->value_type); // type given to us by the AST_DECLARATION from the base type
 
     xcc_assert(ast->declaration);
-    xcc_assert(!ast->declaration->type);
+    // xcc_assert(!ast->declaration->type);
 
     ast->nodes[0]->value_type = ast->value_type;
     type_propogate(ast->nodes[0]);
@@ -588,6 +607,11 @@ static void handle_declarator_ident(AST *ast) {
     xcc_assert(ast->value_type);
     xcc_assert(ast->declaration);
 
+    if (ast->declaration->type) {
+        if (!types_are_compatible(ast->value_type, ast->declaration->type)) {
+            prog_error_ast("redeclaration with incompatible types", ast);
+        }
+    }
     ast->declaration->type = ast->value_type;
 }
 

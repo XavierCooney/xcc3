@@ -27,15 +27,16 @@ static Declaration *append_empty_declaration(ResolutionList *res_list) {
     return declaration;
 }
 
-static bool check_for_duplicating_declaration(ResolutionList *res_list, const char *name, int scope_level, bool is_prototype) {
+static Declaration *check_for_duplicating_declaration(ResolutionList *res_list, const char *name, int scope_level, bool is_prototype, AST *ast) {
     // this can be done more efficiently by iterating from the back of the array and
     // then exiting early once the next scope level is reached
     for (int i = 0; i < res_list->num_local_declarations; ++i) {
         Declaration *declaration = res_list->local_declarations[i];
         if (declaration->scope_level == scope_level && !strcmp(declaration->name, name)) {
             // TODO: allow redeclaration of anything with linkage
-            if (declaration->decl_type == DECL_FUNC_PROTOTYPE && is_prototype) continue;
-            return true;
+            if (declaration->decl_type == DECL_FUNC_PROTOTYPE && is_prototype) return declaration;
+
+            prog_error_ast("shadowing of existing declaration!", ast);
         }
     }
     return false;
@@ -47,15 +48,20 @@ static void handle_ident_declaration(ResolutionList *res_list, AST *ast, AST *pa
 
     bool provides_func_prototype = parent->type == AST_DECLARATOR_FUNC;
 
-    bool is_duplicate = check_for_duplicating_declaration(res_list, ast->identifier_string, scope_level, provides_func_prototype);
-    if (is_duplicate) {
-        prog_error_ast("shadowing of existing declaration!", ast);
-    }
+    Declaration *duplicated_declaration = check_for_duplicating_declaration(
+        res_list, ast->identifier_string, scope_level, provides_func_prototype, ast
+    );
 
-    Declaration *declaration = append_empty_declaration(res_list);
-    xcc_assert(ast->identifier_string);
-    declaration->name = ast->identifier_string;
-    declaration->scope_level = scope_level;
+    Declaration *declaration;
+
+    if (!duplicated_declaration) {
+        declaration = append_empty_declaration(res_list);
+        xcc_assert(ast->identifier_string);
+        declaration->name = ast->identifier_string;
+        declaration->scope_level = scope_level;
+    } else {
+        declaration = duplicated_declaration;
+    }
 
     if (provides_func_prototype) {
         if (declaration_root->type == AST_FUNCTION_DEFINITION) {
@@ -81,6 +87,14 @@ static void handle_ident_declaration(ResolutionList *res_list, AST *ast, AST *pa
     declaration->last_declaration_ast = ast;
     xcc_assert(declarator_group);
     declarator_group->declaration = declaration;
+
+    if (declaration_root->type == AST_FUNCTION_DEFINITION) {
+        if (declaration->definition_ast) {
+            prog_error_ast("redefinition of function", ast);
+        }
+
+        declaration->definition_ast = ast;
+    }
 }
 
 static void handle_ident_usage(ResolutionList *res_list, AST *ast) {
@@ -135,15 +149,15 @@ static void resolve_recursive(ResolutionList *res_list, AST *ast, AST *parent, A
         }
 
         res_list->current_func = ast;
-
-        xcc_assert(ast->num_nodes == 3);
-        resolve_recursive(res_list, ast->nodes[0], ast, declaration_root, declarator_group, scope_level);
-        resolve_recursive(res_list, ast->nodes[1], ast, declaration_root, declarator_group, scope_level);
-
-        old_num_locals = res_list->num_local_declarations;
         is_scope_introduction = true;
 
-        node_offset_index = 2;
+        // xcc_assert(ast->num_nodes == 3);
+        // resolve_recursive(res_list, ast->nodes[0], ast, declaration_root, declarator_group, scope_level);
+
+        // old_num_locals = res_list->num_local_declarations;
+        // node_offset_index = 1;
+
+        // resolve_recursive(res_list, ast->nodes[1], ast, declaration_root, declarator_group, scope_level);
     }
 
     if (ast->type == AST_DECLARATOR_FUNC && declaration_root->type != AST_FUNCTION_DEFINITION) {
@@ -173,6 +187,8 @@ static void resolve_recursive(ResolutionList *res_list, AST *ast, AST *parent, A
     }
 
     if (ast->type == AST_FUNCTION_DEFINITION) {
+        xcc_assert(ast->declaration);
+        append_local_declaration_pointer(res_list, ast->declaration);
         res_list->current_func = NULL;
     }
 }
@@ -213,14 +229,18 @@ static const char *decl_type_to_str(DeclarationType t) {
     xcc_assert_not_reached();
 }
 
+static void dump_declaration_list_implementation(Declaration *declaration) {
+    if (declaration == NULL) return;
+
+    dump_declaration_list_implementation(declaration->next_in_list);
+    fprintf(
+        stderr, "    [%p]: %s %s\n",
+        declaration, declaration->name, decl_type_to_str(declaration->decl_type)
+    );
+}
+
 void dump_declaration_list(ResolutionList *res_list) {
-    Declaration *current = res_list->all_declarations_head;
-
-    fprintf(stderr, "\nDeclaration list:\n");
-    while (current != NULL) {
-        fprintf(stderr, "    [%p]: %s %s\n", current, current->name, decl_type_to_str(current->decl_type));
-
-        current = current->next_in_list;
-    }
+    fprintf(stderr, "Declaration list:\n");
+    dump_declaration_list_implementation(res_list->all_declarations_head);
     fprintf(stderr, "\n");
 }
