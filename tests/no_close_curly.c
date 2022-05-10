@@ -1,3 +1,3 @@
 // @compile_error!
-// @xcc_msg: Expected a IDENTIFIER, but found a EOF
+// @xcc_msg: expected declarator!
 int

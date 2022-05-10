@@ -1,7 +1,7 @@
 #include "xcc.h"
 
 static bool is_lvalue(AST *ast) {
-    return ast->type == AST_VAR_USE;
+    return ast->type == AST_IDENT_USE;
 }
 
 void check_lvalue(AST *ast) {
@@ -28,7 +28,7 @@ bool check_for_return(AST *ast) {
         has_return = has_return || check_for_return(ast->nodes[i]);
     }
 
-    if (ast->type == AST_FUNCTION) {
+    if (ast->type == AST_FUNCTION_DEFINITION) {
         if (!has_return) {
             prog_error_ast("function doesn't have a return", ast);
         }

@@ -51,6 +51,9 @@ def run_test(test_file_path):
         return (FAILURE, 'gave stdout', xcc_captured_output)
 
     decoded_stderr = xcc_captured_output.stderr.decode('utf-8')
+    if 'assertion failure' in decoded_stderr:
+        return (FAILURE, f"compile assertion failure", xcc_captured_output)
+
     for compile_error_line in get_param_values('xcc_msg'):
         if compile_error_line not in decoded_stderr:
             return (FAILURE, f"compile error doesn't have: `{compile_error_line}`", xcc_captured_output)

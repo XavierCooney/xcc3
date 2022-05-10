@@ -9,6 +9,11 @@ static Token *current_token(Parser *parser) {
     return &parser->lexer->tokens[parser->current_token];
 }
 
+static Token *prev_token(Parser *parser) {
+    xcc_assert(parser->current_token > 0);
+    return &parser->lexer->tokens[parser->current_token - 1];
+}
+
 NORETURN static void parse_error(Parser *parser, const char *msg) {
     begin_prog_error_range(msg, current_token(parser), current_token(parser));
     fprintf(
@@ -18,16 +23,20 @@ NORETURN static void parse_error(Parser *parser, const char *msg) {
     end_prog_error();
 }
 
+NORETURN static void parse_error_prev(Parser *parser, const char *msg) {
+    begin_prog_error_range(msg, prev_token(parser), prev_token(parser));
+    fprintf(
+        stderr, "  (current token is %s)\n",
+        lex_token_type_to_string(prev_token(parser)->type)
+    );
+    end_prog_error();
+}
+
 static Token *advance(Parser *parser) {
     xcc_assert(parser->current_token + 1 < parser->lexer->num_tokens);
     Token *token = &parser->lexer->tokens[parser->current_token];
     parser->current_token++;
     return token;
-}
-
-static Token *prev_token(Parser *parser) {
-    xcc_assert(parser->current_token > 0);
-    return &parser->lexer->tokens[parser->current_token - 1];
 }
 
 static Token *accept(Parser *parser, TokenType token_type) {
@@ -81,7 +90,7 @@ static AST *accept_type(Parser *parser) {
     return NULL;
 }
 
-static AST *expect_type(Parser *parser) {
+AST *expect_type(Parser *parser) {
     AST *type = accept_type(parser);
     if(type) return type;
 
@@ -100,8 +109,10 @@ static long long parse_integer_literal_value(Token *token) {
 }
 
 static AST *parse_expression(Parser *parser);
+static AST *parse_declaration(Parser *parser, bool as_parameter);
+static bool current_token_is_specifier(Parser *parser);
 static AST *parse_statement(Parser *parser);
-static AST *parse_block(Parser *parser, ASTType body_type);
+static AST *parse_block(Parser *parser);
 
 static AST *parse_primary(Parser *parser) {
     if(accept(parser, TOK_OPEN_PAREN)) {
@@ -116,35 +127,41 @@ static AST *parse_primary(Parser *parser) {
     } else if(accept(parser, TOK_IDENTIFIER)) {
         Token *ident_token = prev_token(parser);
 
-        if(accept(parser, TOK_OPEN_PAREN)) {
-            AST *ast_call = ast_new(AST_CALL, ident_token);
-            ast_call->identifier_string = ident_token->contents;
-
-            while(!accept(parser, TOK_CLOSE_PAREN)) {
-                ast_append(ast_call, parse_expression(parser));
-                if(current_token(parser)->type != TOK_CLOSE_PAREN) {
-                    expect(parser, TOK_COMMA);
-                }
-            }
-
-            return ast_call;
-        } else {
-            AST *var_usage_ast = ast_new(AST_VAR_USE, ident_token);
-            var_usage_ast->identifier_string = ident_token->contents;
-            return var_usage_ast;
-        }
+        AST *ident_usage_ast = ast_new(AST_IDENT_USE, ident_token);
+        ident_usage_ast->identifier_string = ident_token->contents;
+        return ident_usage_ast;
     } else {
         parse_error(parser, "need expression");
     }
 }
 
-static AST *parse_multiplicative(Parser *parser) {
+static AST *parse_unary_postfix(Parser *parser) {
     AST *a = parse_primary(parser);
+
+    while (accept(parser, TOK_OPEN_PAREN)) {
+        AST *ast_call = ast_new(AST_CALL, a->main_token);
+        ast_append(ast_call, a);
+
+        while(!accept(parser, TOK_CLOSE_PAREN)) {
+            ast_append(ast_call, parse_expression(parser));
+            if(current_token(parser)->type != TOK_CLOSE_PAREN) {
+                expect(parser, TOK_COMMA);
+            }
+        }
+
+        a = ast_call;
+    }
+
+    return a;
+}
+
+static AST *parse_multiplicative(Parser *parser) {
+    AST *a = parse_unary_postfix(parser);
 
     while (accept(parser, TOK_STAR) || accept(parser, TOK_SLASH)) {
         Token *token = prev_token(parser);
 
-        AST *b = parse_primary(parser);
+        AST *b = parse_unary_postfix(parser);
 
         ASTType ast_type = token->type == TOK_STAR ? AST_MULTIPLY : AST_DIVIDE;
         AST *add_ast = ast_new(ast_type, token);
@@ -276,11 +293,8 @@ static AST *parse_while(Parser *parser) {
 }
 
 static AST *parse_statement(Parser *parser) {
-    Token *first_token = current_token(parser);
-    AST *ast_type;
-
     if (accept(parser, TOK_KEYWORD_RETURN)) {
-        AST *return_ast = ast_new(AST_RETURN_STMT, first_token);
+        AST *return_ast = ast_new(AST_RETURN_STMT, prev_token(parser));
 
         if (!accept(parser, TOK_SEMICOLON)) {
             ast_append(return_ast, parse_expression(parser));
@@ -291,24 +305,10 @@ static AST *parse_statement(Parser *parser) {
         return parse_if(parser);
     } else if (accept(parser, TOK_KEYWORD_WHILE)) {
         return parse_while(parser);
-    } else if ((ast_type = accept_type(parser))) {
-        // TODO: actually properly parse declarations...
-        Token *var_name_token = expect(parser, TOK_IDENTIFIER);
-        const char *var_name = var_name_token->contents;
-
-        AST *var_declare_ast = ast_new(AST_VAR_DECLARE, var_name_token);
-        var_declare_ast->identifier_string = var_name;
-        ast_append(var_declare_ast, ast_type);
-
-        if(accept(parser, TOK_EQUALS)) {
-            AST *initialiser = parse_expression(parser);
-            ast_append(var_declare_ast, initialiser);
-        }
-        expect(parser, TOK_SEMICOLON);
-
-        return var_declare_ast;
+    } else if (current_token_is_specifier(parser)) {
+        return parse_declaration(parser, false);
     } else if (accept(parser, TOK_OPEN_CURLY)) {
-        return parse_block(parser, AST_BLOCK_STATEMENT);
+        return parse_block(parser);
     } else {
         AST *expression_ast = parse_expression(parser);
         AST *statement_ast = ast_new(AST_STATEMENT_EXPRESSION, expression_ast->main_token);
@@ -318,8 +318,8 @@ static AST *parse_statement(Parser *parser) {
     }
 }
 
-static AST *parse_block(Parser *parser, ASTType body_type) {
-    AST *body_ast = ast_new(body_type, prev_token(parser));
+static AST *parse_block(Parser *parser) {
+    AST *body_ast = ast_new(AST_BLOCK_STATEMENT, prev_token(parser));
 
     while (!accept(parser, TOK_CLOSE_CURLY)) {
         AST *statement = parse_statement(parser);
@@ -329,58 +329,127 @@ static AST *parse_block(Parser *parser, ASTType body_type) {
     return body_ast;
 }
 
-static AST *parse_function(Parser *parser) {
-    AST *return_type_ast = expect_type(parser);
+static bool current_token_is_specifier(Parser *parser) {
+    TokenType current_type = current_token(parser)->type;
+    switch (current_type) {
+        case TOK_KEYWORD_INT: return true;
+        case TOK_KEYWORD_CHAR: return true;
+        case TOK_KEYWORD_VOID: return true;
+        case TOK_KEYWORD_SHORT: return true;
+        case TOK_KEYWORD_LONG: return true;
+        case TOK_KEYWORD_SIGNED: return true;
+        case TOK_KEYWORD_UNSIGNED: return true;
+        default: return false;
+    }
+    xcc_assert_not_reached();
+}
 
-    Token *func_name_token = expect(parser, TOK_IDENTIFIER);
+static AST *parse_declarator(Parser *parser) {
+    AST *declarator = NULL;
 
-    AST *param_list = ast_new(AST_FUNC_DECL_PARAM_LIST, current_token(parser));
-    expect(parser, TOK_OPEN_PAREN);
+    if (accept(parser, TOK_OPEN_PAREN)) {
+        declarator = parse_declarator(parser);
+        expect(parser, TOK_CLOSE_PAREN);
+    } else if (accept(parser, TOK_IDENTIFIER)) {
+        declarator = ast_new(AST_DECLARATOR_IDENT, prev_token(parser));
+        declarator->identifier_string = declarator->main_token->contents;
+    } else {
+        parse_error(parser, "expected declarator");
+    }
 
-    while (!accept(parser, TOK_CLOSE_PAREN)) {
-        AST *param_type = expect_type(parser);
-        Token *param_name_token = accept(parser, TOK_IDENTIFIER);
-        AST *param = ast_new(AST_PARAMETER, param_name_token);
-        param->identifier_string = param_name_token->contents;
-        ast_append(param, param_type);
-        ast_append(param_list, param);
+    // TODO: array declerators go here
+    while (accept(parser, TOK_OPEN_PAREN)) {
+        AST *old_declarator = declarator;
+        declarator = ast_new(AST_DECLARATOR_FUNC, declarator->main_token);
+        ast_append(declarator, old_declarator);
 
-        if(current_token(parser)->type != TOK_CLOSE_PAREN) {
-            expect(parser, TOK_COMMA);
+        do {
+            if (current_token(parser)->type == TOK_CLOSE_PAREN) {
+                // TODO: handle this case properly
+                // Really in this case we shouldn't provide a prototype. But
+                // I really don't know why you'd use this syntax in the
+                // modern age...
+
+                // parse_error(parser, "empty param list doesn't provide a prototype");
+
+                break;
+            }
+
+            if (accept(parser, TOK_KEYWORD_VOID)) {
+                if (declarator->num_nodes != 1) {
+                    parse_error(parser, "void after parameter!");
+                }
+
+                break;
+            }
+
+            // TODO: handle parameters without identifiers
+            AST *param_declaration = parse_declaration(parser, true);
+            param_declaration->type = AST_PARAMETER;
+            ast_append(declarator, param_declaration);
+
+            if (current_token(parser)->type != TOK_CLOSE_PAREN) {
+                expect(parser, TOK_COMMA);
+            }
+        } while (current_token(parser)->type != TOK_CLOSE_PAREN);
+
+        expect(parser, TOK_CLOSE_PAREN);
+    }
+
+    return declarator;
+}
+
+static AST *parse_declarator_and_initialiser(Parser *parser) {
+    AST *declarator_group = ast_new(AST_DECLARATOR_GROUP, current_token(parser));
+    AST *declarator = parse_declarator(parser);
+    ast_append(declarator_group, declarator);
+
+    if (accept(parser, TOK_EQUALS)) {
+        AST *initialiser = parse_expression(parser);
+        ast_append(declarator_group, initialiser);
+    }
+
+    return declarator_group;
+}
+
+static AST *parse_declaration(Parser *parser, bool as_parameter) {
+    AST *declaration = ast_new(AST_DECLARATION, current_token(parser));
+    AST *specifier_part = ast_new(AST_DECLARATION_SPECIFIERS, current_token(parser));
+    ast_append(declaration, specifier_part);
+
+    while (current_token_is_specifier(parser)) {
+        AST *specifier = ast_new(AST_DECLARATION_SPECIFIER, accept(parser, current_token(parser)->type));
+        specifier->identifier_string = specifier->main_token->contents;
+        ast_append(specifier_part, specifier);
+    }
+
+    do {
+        ast_append(declaration, parse_declarator_and_initialiser(parser));
+    } while (!as_parameter && accept(parser, TOK_COMMA));
+
+    if (accept(parser, TOK_OPEN_CURLY)) {
+        if (declaration->num_nodes != 2) {
+            parse_error_prev(parser, "function definition can only have one declarator");
         }
+
+        declaration->type = AST_FUNCTION_DEFINITION;
+        ast_append(declaration, parse_block(parser));
+        return declaration;
     }
 
-    bool just_prototype = accept(parser, TOK_SEMICOLON);
-
-    AST *func_ast = ast_new(
-        just_prototype ? AST_FUNCTION_PROTOTYPE : AST_FUNCTION, func_name_token
-    );
-    func_ast->identifier_string = func_name_token->contents;
-    ast_append(func_ast, return_type_ast);
-    ast_append(func_ast, param_list);
-
-    if(just_prototype) return func_ast;
-
-    expect(parser, TOK_OPEN_CURLY);
-    AST *block_ast = parse_block(parser, AST_BODY);
-    ast_append(func_ast, block_ast);
-
-    if (!strcmp(func_name_token->contents, "main")) {
-        // main() has implicit return 0
-        AST *return_stmt = ast_append_new(block_ast, AST_RETURN_STMT, prev_token(parser));
-        AST *literal_0 = ast_append_new(return_stmt, AST_INTEGER_LITERAL, prev_token(parser));
-        literal_0->integer_literal_val = 0;
+    if (!as_parameter) {
+        expect(parser, TOK_SEMICOLON);
     }
 
-    return func_ast;
+    return declaration;
 }
 
 static AST *parse_unit(Parser *parser) {
     AST *program_ast = ast_new(AST_PROGRAM, current_token(parser));
 
     while (current_token(parser)->type != TOK_EOF) {
-        AST *func_ast = parse_function(parser);
-        ast_append(program_ast, func_ast);
+        AST *declaration_ast = parse_declaration(parser, false);
+        ast_append(program_ast, declaration_ast);
     }
 
     return program_ast;

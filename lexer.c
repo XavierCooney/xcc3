@@ -7,7 +7,11 @@ static void retract_token(Lexer *lexer);
 const char *lex_token_type_to_string(TokenType type) {
     switch(type) {
         case TOK_KEYWORD_INT: return "KEYWORD_INT";
+        case TOK_KEYWORD_SHORT: return "KEYWORD_SHORT";
+        case TOK_KEYWORD_LONG: return "KEYWORD_LONG";
         case TOK_KEYWORD_CHAR: return "KEYWORD_CHAR";
+        case TOK_KEYWORD_SIGNED: return "KEYWORD_SIGNED";
+        case TOK_KEYWORD_UNSIGNED: return "KEYWORD_UNSIGNED";
         case TOK_KEYWORD_VOID: return "KEYWORD_VOID";
         case TOK_KEYWORD_RETURN: return "KEYWORD_RETURN";
         case TOK_KEYWORD_IF: return "KEYWORD_IF";
@@ -485,6 +489,11 @@ static void lex_a_token(Lexer *lexer) {
         match_keyword_token(token, "if", TOK_KEYWORD_IF);
         match_keyword_token(token, "else", TOK_KEYWORD_ELSE);
         match_keyword_token(token, "while", TOK_KEYWORD_WHILE);
+        match_keyword_token(token, "short", TOK_KEYWORD_SHORT);
+        match_keyword_token(token, "long", TOK_KEYWORD_LONG);
+        match_keyword_token(token, "signed", TOK_KEYWORD_SIGNED);
+        match_keyword_token(token, "unsigned", TOK_KEYWORD_UNSIGNED);
+
         return;
     } else if (try_lex_an_integer(lexer)) {
         return;

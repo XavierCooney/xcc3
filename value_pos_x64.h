@@ -3,7 +3,8 @@
 #include "xcc.h"
 
 typedef enum {
-    POS_LITERAL, POS_STACK, POS_REG, POS_VOID
+    POS_LITERAL, POS_STACK, POS_REG, POS_VOID,
+    POS_FUNC_NAME
 } PositionType;
 
 typedef enum {
@@ -21,6 +22,7 @@ typedef struct ValuePosition {
     union {
         int stack_offset;
         RegLoc register_num;
+        const char *func_name;
     };
 
     int size;

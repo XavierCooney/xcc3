@@ -29,7 +29,7 @@ bool xcc_verbose();
 #include "ast.h"
 #include "value_pos_x64.h"
 #include "parser.h"
-#include "resolve.h"
+#include "declaration.h"
 #include "types.h"
 #include "misc_checks.h"
 #include "generate.h"

@@ -23,14 +23,11 @@ AST *ast_new(ASTType type, Token *token) {
     new_ast->num_nodes_allocated = 0;
     new_ast->type = type;
     new_ast->main_token = token;
-    new_ast->unknown_resolution = NULL;
+    new_ast->declaration = NULL;
     new_ast->value_type = NULL;
 
     if (ast_is_block(new_ast)) {
         new_ast->block_max_stack_depth = -1;
-    }
-    if (type == AST_FUNCTION || type == AST_FUNCTION_PROTOTYPE || type == AST_CALL || type == AST_RETURN_STMT) {
-        new_ast->function_res = NULL;
     }
 
     return new_ast;
@@ -43,7 +40,7 @@ AST *ast_append_new(AST *parent, ASTType type, Token *token) {
 }
 
 bool ast_is_block(AST *ast) {
-    return ast->type == AST_BODY || ast->type == AST_BLOCK_STATEMENT;
+    return ast->type == AST_BLOCK_STATEMENT;
 }
 
 void ast_free(AST *ast) {
@@ -60,15 +57,20 @@ void ast_free(AST *ast) {
 const char *ast_node_type_to_str(ASTType type) {
     switch(type) {
         case AST_PROGRAM: return "PROGRAM";
-        case AST_FUNCTION: return "FUNCTION";
-        case AST_FUNCTION_PROTOTYPE: return "FUNCTION_PROTOTYPE";
+        case AST_DECLARATION: return "DECLARATION";
+        case AST_FUNCTION_DEFINITION: return "FUNCTION_DEFINITION";
+        case AST_DECLARATION_SPECIFIER: return "DECLARATION_SPECIFIER";
+        case AST_DECLARATION_SPECIFIERS: return "DECLARATION_SPECIFIERS";
+        case AST_DECLARATOR_IDENT: return "DECLARATOR_IDENT";
+        case AST_DECLARATOR_POINTER: return "DECLARATOR_POINTER";
+        case AST_DECLARATOR_ARRAY: return "DECLARATOR_ARRAY";
+        case AST_DECLARATOR_FUNC: return "DECLARATOR_FUNC";
+        case AST_DECLARATOR_GROUP: return "DECLARATOR_GROUP";
         case AST_PARAMETER: return "PARAMETER";
         case AST_TYPE: return "TYPE";
         case AST_TYPE_INT: return "TYPE_INT";
         case AST_TYPE_CHAR: return "TYPE_CHAR";
         case AST_TYPE_VOID: return "TYPE_VOID";
-        case AST_FUNC_DECL_PARAM_LIST: return "FUNC_DECL_PARAM_LIST";
-        case AST_BODY: return "BODY";
         case AST_RETURN_STMT: return "RETURN_STMT";
         case AST_INTEGER_LITERAL: return "INTEGER_LITERAL";
         case AST_ADD: return "ADD";
@@ -78,8 +80,7 @@ const char *ast_node_type_to_str(ASTType type) {
         case AST_REMAINDER: return "REMAINDER";
         case AST_CALL: return "CALL";
         case AST_STATEMENT_EXPRESSION: return "STATEMENT_EXPRESSION";
-        case AST_VAR_DECLARE: return "VAR_DECLARE";
-        case AST_VAR_USE: return "VAR_USE";
+        case AST_IDENT_USE: return "IDENT_USE";
         case AST_ASSIGN: return "ASSIGN";
         case AST_CONVERT_TO_BOOL: return "CONVERT_TO_BOOL";
         case AST_CONVERT_TO_INT: return "CONVERT_TO_INT";
@@ -124,29 +125,31 @@ static void ast_debug_internal(bool just_lines, AST *ast, int depth,
     xcc_assert(ast != NULL);
 
     fprintf(stderr, "%s", ast_node_type_to_str(ast->type));
+
     if(ast->type == AST_INTEGER_LITERAL) {
         fprintf(stderr, " [%lld]", ast->integer_literal_val);
-    } else if(ast->type == AST_FUNCTION) {
-        fprintf(stderr, " [%s] [resolution %p]", ast->identifier_string, ast->function_res);
-    } else if(ast->type == AST_FUNCTION_PROTOTYPE) {
-        fprintf(stderr, " [%s] [resolution %p]", ast->identifier_string, ast->function_res);
-    } else if(ast->type == AST_CALL) {
-        fprintf(stderr, " [%s] [resolution %p]", ast->identifier_string, ast->function_res);
     } else if(ast->type == AST_RETURN_STMT) {
-        fprintf(stderr, " [resolution %p]", ast->function_res);
-    } else if(ast->type == AST_VAR_DECLARE) {
-        fprintf(stderr, " [%s] [resolution %p]", ast->identifier_string, ast->var_res);
-    } else if(ast->type == AST_PARAMETER) {
-        fprintf(stderr, " [%s] [resolution %p]", ast->identifier_string, ast->var_res);
-    } else if(ast->type == AST_VAR_USE) {
-        fprintf(stderr, " [%s] [resolution %p]", ast->identifier_string, ast->var_res);
-    } else if(ast->type == AST_BODY) {
-        fprintf(stderr, " [max depth %i]", ast->block_max_stack_depth);
+        fprintf(stderr, " [declaration %p]", ast->declaration);
+    } else if(ast->type == AST_DECLARATOR_GROUP) {
+        fprintf(stderr, " [declaration %p]", ast->declaration);
+    } else if (ast->type == AST_DECLARATOR_IDENT) {
+        fprintf(stderr, " [%s] [declaration %p]", ast->identifier_string, ast->declaration);
+    } else if (ast->type == AST_FUNCTION_DEFINITION) {
+        fprintf(stderr, " [declaration %p]", ast->declaration);
+    } else if (ast->type == AST_PARAMETER) {
+        fprintf(stderr, " [declaration %p]", ast->declaration);
+    } else if(ast->type == AST_IDENT_USE) {
+        fprintf(stderr, " [%s] [declaration %p]", ast->identifier_string, ast->declaration);
+    } else if (ast->type == AST_DECLARATION_SPECIFIER) {
+        fprintf(stderr, " [%s]", ast->identifier_string);
+    } else if (ast->type == AST_BLOCK_STATEMENT) {
+        fprintf(stderr, " [max depth %d]", ast->block_max_stack_depth);
     }
 
     if(ast->value_type) {
-        fprintf(stderr, " ");
+        fprintf(stderr, " [TYPE ");
         type_dump(ast->value_type);
+        fprintf(stderr, "]");
     }
 
     if(ast->pos) {

@@ -7,10 +7,16 @@ typedef struct {
     int max_depth;
 } AllocationStatus;
 
+static ValuePosition *copy_value_pos(ValuePosition *old) {
+    ValuePosition *new = xcc_malloc(sizeof(ValuePosition));
+    memcpy(new, old, sizeof(ValuePosition));
+    return new;
+}
+
 static bool is_expression_node(AST *ast) {
     ASTType t = ast->type;
     int is_expression = t == AST_INTEGER_LITERAL || t == AST_CALL;
-    is_expression = is_expression || t == AST_VAR_USE || t == AST_ASSIGN;
+    is_expression = is_expression || t == AST_IDENT_USE || t == AST_ASSIGN;
     is_expression = is_expression || t == AST_CONVERT_TO_INT || t == AST_CONVERT_TO_BOOL;
     is_expression = is_expression || t == AST_ADD || t == AST_SUBTRACT || t == AST_MULTIPLY;
     is_expression = is_expression || t == AST_DIVIDE;
@@ -51,6 +57,8 @@ static int get_type_size(Type *type) {
 
             case TYPE_LONG_LONG: return 8;
             case TYPE_ULONG_LONG: return 8;
+
+            case TYPE_INTEGER_LAST: xcc_assert_not_reached();
         }
 
         xcc_assert_not_reached();
@@ -98,46 +106,63 @@ static void set_value_pos_to_type(ValuePosition *pos, Type *type) {
 
 #define TOTAL_DEPTH(allocation) ((allocation)->temporary_depth + (allocation)->local_var_depth)
 
+static void handle_ident_declaration(AST *ast, AllocationStatus *allocation) {
+    xcc_assert(ast->type == AST_DECLARATOR_IDENT);
+    xcc_assert(ast->num_nodes == 0);
+
+     if (ast->declaration->decl_type == DECL_LOCAL_VAR) {
+        ast->pos = xcc_malloc(sizeof(ValuePosition));
+        ast->pos->type = POS_STACK;
+        set_value_pos_to_type(ast->pos, ast->value_type);
+
+        int offset_amt = TOTAL_DEPTH(allocation) + ast->pos->size;
+        allocation->local_var_depth += offset_amt;
+
+        ast->pos->stack_offset = offset_amt;
+    } else if (ast->declaration->decl_type == DECL_GLOBAL_VAR) {
+        xcc_assert_not_reached();
+    } else if (ast->declaration->decl_type == DECL_FUNC_PROTOTYPE) {
+        ast->pos = xcc_malloc(sizeof(ValuePosition));
+        ast->pos->type = POS_FUNC_NAME;
+        ast->pos->func_name = ast->declaration->name;
+    } else if (ast->declaration->decl_type == DECL_PARAM_TYPE) {
+        // nothing to do here
+    } else {
+        xcc_assert_not_reached();
+    }
+
+    ast->declaration->pos = ast->pos;
+}
+
 static void allocate_vals_recursive(AST *ast, AllocationStatus *allocation) {
-    int old_temporary_depth = allocation->temporary_depth;
-    int old_local_var_depth = allocation->local_var_depth;
+    int old_temporary_depth = allocation ? allocation->temporary_depth : -1;
+    int old_local_var_depth = allocation ? allocation->local_var_depth : -1;
 
     for (int i = 0; i < ast->num_nodes; ++i) {
         allocate_vals_recursive(ast->nodes[i], allocation);
     }
 
-    allocation->temporary_depth = old_temporary_depth;
+    if (allocation) {
+        allocation->temporary_depth = old_temporary_depth;
+    }
 
     // TODO: we also need to make sure of alignment for AST_CALL and also
     // other stuff on the stack.
 
     if (ast_is_block(ast)) {
+        xcc_assert(allocation);
+
         allocation->local_var_depth = old_local_var_depth;
         ast->block_max_stack_depth = allocation->max_depth;
-    } else if (ast->type == AST_VAR_DECLARE || (ast->type == AST_PARAMETER && ast->var_res)) {
-        xcc_assert(ast->num_nodes >= 1);
-
-        // because it's a statement, it semantically shouldn't have a
-        // value position, but it's easier in the generator if we
-        // just stick one on it
-        ast->pos = xcc_malloc(sizeof(ValuePosition));
-        ast->pos->type = POS_STACK;
-        set_value_pos_to_type(ast->pos, ast->nodes[0]->value_type);
-        xcc_assert(ast->nodes[0]->value_type->type_type != TYPE_VOID);
-
-        ast->var_res->stack_offset = TOTAL_DEPTH(allocation) + ast->pos->size;
-        int offset_amt = ast->pos->size;
-        allocation->local_var_depth += offset_amt;
-
-        ast->pos->stack_offset = ast->var_res->stack_offset;
-    } else if (ast->type == AST_VAR_USE) {
-        ast->pos = xcc_malloc(sizeof(ValuePosition));
-        set_value_pos_to_type(ast->pos, ast->value_type);
-        xcc_assert(ast->value_type->type_type != TYPE_VOID);
-
-        ast->pos->type = POS_STACK;
-        ast->pos->stack_offset = ast->var_res->stack_offset;
+    } else if (ast->type == AST_DECLARATOR_IDENT) {
+        handle_ident_declaration(ast, allocation);
+    } else if (ast->type == AST_IDENT_USE) {
+        xcc_assert(ast->declaration);
+        xcc_assert(ast->declaration->pos);
+        ast->pos = copy_value_pos(ast->declaration->pos);
     } else if (is_expression_node(ast)) {
+        xcc_assert(allocation);
+
         ast->pos = xcc_malloc(sizeof(ValuePosition));
         set_value_pos_to_type(ast->pos, ast->value_type);
 
@@ -152,13 +177,13 @@ static void allocate_vals_recursive(AST *ast, AllocationStatus *allocation) {
         }
     }
 
-    allocation->max_depth = max(TOTAL_DEPTH(allocation), allocation->max_depth);
+    if (allocation) {
+        allocation->max_depth = max(TOTAL_DEPTH(allocation), allocation->max_depth);
+    }
 }
 
 static void allocate_vals_for_func(AST *func) {
-    if(func->type == AST_FUNCTION_PROTOTYPE) return;
-
-    xcc_assert(func->type == AST_FUNCTION);
+    xcc_assert(func->type == AST_FUNCTION_DEFINITION);
 
     AllocationStatus allocation;
     allocation.temporary_depth = 0;
@@ -167,15 +192,17 @@ static void allocate_vals_for_func(AST *func) {
     allocate_vals_recursive(func, &allocation);
 
     xcc_assert(allocation.temporary_depth == 0);
-    // xcc_assert(allocation.local_var_depth == 0);
-    // xcc_assert(TOTAL_DEPTH(&allocation) == 0);
 }
 
 void value_pos_allocate(AST *ast) {
     xcc_assert(ast->type == AST_PROGRAM);
 
     for(int i = 0; i < ast->num_nodes; ++i) {
-        allocate_vals_for_func(ast->nodes[i]);
+        if (ast->nodes[i]->type == AST_DECLARATION) {
+            allocate_vals_recursive(ast->nodes[i], NULL);
+        } else {
+            allocate_vals_for_func(ast->nodes[i]);
+        }
     }
 }
 
@@ -234,11 +261,11 @@ void value_pos_free_preallocated() {
 void value_pos_dump(ValuePosition *value_pos) {
     fprintf(stderr, "[POS ");
 
-    if (value_pos->type != POS_VOID) {
+    if (value_pos->type != POS_VOID && value_pos->type != POS_FUNC_NAME) {
         fprintf(stderr, "size %d align %d ", value_pos->size, value_pos->alignment);
     }
 
-    switch(value_pos->type) {
+    switch (value_pos->type) {
         case POS_STACK:
             fprintf(stderr, "STACK offset %d]", value_pos->stack_offset);
             break;
@@ -250,6 +277,9 @@ void value_pos_dump(ValuePosition *value_pos) {
             break;
         case POS_VOID:
             fprintf(stderr, "VOID]");
+            break;
+        case POS_FUNC_NAME:
+            fprintf(stderr, "FUNC NAME %s]", value_pos->func_name);
             break;
     }
 }

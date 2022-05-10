@@ -167,6 +167,8 @@ static ValuePosition *possibly_move_to_temp(ValuePosition *a, ValuePosition *b) 
 }
 
 static void generate_move(ValuePosition *from, ValuePosition *to) {
+    xcc_assert(from);
+    xcc_assert(to);
     xcc_assert(from->size == to->size);
     xcc_assert(from->is_signed == to->is_signed);
 
@@ -363,20 +365,19 @@ static RegLoc argument_index_to_register(int index) {
 }
 
 static void generate_call_expression(GenContext *ctx, AST *ast) {
-    FunctionResolution *res = ast->function_res;
-    xcc_assert(res);
+    xcc_assert(ast->num_nodes >= 1);
+    xcc_assert(ast->nodes[0]->pos->type == POS_FUNC_NAME);
 
-    xcc_assert(res->num_arguments == ast->num_nodes);
-    for(int i = 0; i < res->num_arguments; ++i) {
+    for(int i = 1; i < ast->num_nodes; ++i) {
         AST *argument_ast = ast->nodes[i];
         generate_expression(ctx, argument_ast);
 
-        RegLoc arg_reg = argument_index_to_register(i);
+        RegLoc arg_reg = argument_index_to_register(i - 1);
         generate_move(argument_ast->pos, value_pos_reg(arg_reg, argument_ast->pos->size));
     }
 
     generate_asm_partial("call ");
-    generate_asm(res->name);
+    generate_asm(ast->nodes[0]->pos->func_name);
 
     if (ast->pos->type != POS_VOID) {
         generate_move(value_pos_reg(REG_RAX, ast->pos->size), ast->pos);
@@ -469,7 +470,7 @@ static void generate_expression(GenContext *ctx, AST *ast) {
         generate_comparison_expression(ctx, ast);
     } else if (ast->type == AST_CALL) {
         generate_call_expression(ctx, ast);
-    } else if (ast->type == AST_VAR_USE) {
+    } else if (ast->type == AST_IDENT_USE) {
         // hopefully the value at value_pos has the variable value already...
         // so we do nothing here
     } else if (ast->type == AST_ASSIGN) {
@@ -606,12 +607,18 @@ static void generate_statement(GenContext *ctx, AST *ast) {
         generate_if(ctx, ast);
     } else if(ast->type == AST_WHILE) {
         generate_while(ctx, ast);
-    } else if(ast->type == AST_VAR_DECLARE) {
-        xcc_assert(ast->num_nodes == 2);
-        generate_expression(ctx, ast->nodes[1]);
-        generate_move(ast->nodes[1]->pos, ast->pos);
+    } else if(ast->type == AST_DECLARATOR_GROUP) {
+        if (ast->num_nodes == 2) {
+            // declaration with initialisation
+            generate_expression(ctx, ast->nodes[1]);
+            generate_move(ast->nodes[1]->pos, ast->declaration->pos);
+        }
     } else if (ast->type == AST_BLOCK_STATEMENT) {
         for (int i = 0; i < ast->num_nodes; ++i) {
+            generate_statement(ctx, ast->nodes[i]);
+        }
+    } else if (ast->type == AST_DECLARATION) {
+        for (int i = 1; i < ast->num_nodes; ++i) {
             generate_statement(ctx, ast->nodes[i]);
         }
     } else {
@@ -620,7 +627,7 @@ static void generate_statement(GenContext *ctx, AST *ast) {
 }
 
 static void generate_body(GenContext *ctx, AST *ast) {
-    xcc_assert(ast->type == AST_BODY);
+    xcc_assert(ast->type == AST_BLOCK_STATEMENT);
 
     for(int i = 0; i < ast->num_nodes; ++i) {
         generate_statement(ctx, ast->nodes[i]);
@@ -628,24 +635,26 @@ static void generate_body(GenContext *ctx, AST *ast) {
 }
 
 static void generate_param_loading(AST *ast) {
-    xcc_assert(ast->type == AST_FUNC_DECL_PARAM_LIST);
+    xcc_assert(ast->type == AST_DECLARATOR_GROUP);
+    xcc_assert(ast->num_nodes == 1);
+    ast = ast->nodes[0];
+    xcc_assert(ast->type == AST_DECLARATOR_FUNC);
 
-    for (int i = 0; i < ast->num_nodes; ++i) {
+    for (int i = 1; i < ast->num_nodes; ++i) {
         AST *param = ast->nodes[i];
         xcc_assert(param->type == AST_PARAMETER);
-        xcc_assert(param->num_nodes == 1);
-        xcc_assert(param->pos);
+        xcc_assert(param->declaration->pos);
 
-        RegLoc arg_reg = argument_index_to_register(i);
-        generate_move(value_pos_reg(arg_reg, param->pos->size), param->pos);
+        RegLoc arg_reg = argument_index_to_register(i - 1);
+        generate_move(value_pos_reg(arg_reg, param->declaration->pos->size), param->declaration->pos);
     }
 }
 
 static void generate_function(AST *ast) {
-    xcc_assert(ast->type == AST_FUNCTION);
+    xcc_assert(ast->type == AST_FUNCTION_DEFINITION);
     xcc_assert(ast->num_nodes == 3);
 
-    const char *name = ast->identifier_string;
+    const char *name = ast->declaration->name;
 
     generate_asm_partial(".global ");
     generate_asm(name);
@@ -688,7 +697,7 @@ void generate_x64(AST *ast, const char *filename) {
     generate_asm(".align 4");
 
     for(int i = 0; i < ast->num_nodes; ++i) {
-        if(ast->nodes[i]->type == AST_FUNCTION_PROTOTYPE) continue;
+        if(ast->nodes[i]->type == AST_DECLARATION) continue;
 
         generate_function(ast->nodes[i]);
     }

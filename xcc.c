@@ -141,8 +141,11 @@ int main(int argc, char **argv) {
     AST *program_ast = parse_program(lexer);
     if(xcc_verbose()) ast_dump(program_ast, "parsed");
 
-    Resolutions *resolutions = resolve(program_ast);
-    if(xcc_verbose()) ast_dump(program_ast, "resolved");
+    ResolutionList *res_list = resolve_declarations(program_ast);
+    if(xcc_verbose()) {
+        ast_dump(program_ast, "resolved");
+        dump_declaration_list(res_list);
+    }
 
     check_lvalue(program_ast);
 
@@ -170,7 +173,7 @@ int main(int argc, char **argv) {
 
     value_pos_free_preallocated();
     type_free_all();
-    resolve_free(resolutions);
+    resolve_free(res_list);
     ast_free(program_ast);
     lex_free_lexer(lexer);
 

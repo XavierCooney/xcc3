@@ -1,5 +1,5 @@
 // @compile_error!
-// @xcc_msg: Program error: Redeclaration/shadowing of variable!
+// @xcc_msg: Program error: shadowing of existing declaration!!
 // @xcc_msg: `x`
 
 int main() {

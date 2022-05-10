@@ -1,9 +1,9 @@
-parts = xcc lexer ast parser resolve types misc_checks value_pos_x64 generate generate_x64
+parts = xcc lexer ast parser declaration types misc_checks value_pos_x64 generate generate_x64
 
 object_files = $(addsuffix .o,$(addprefix build/,$(parts)))
 source_files = $(addsuffix .c,$(parts))
 header_files = *.h
-cflags = -fsanitize=undefined -Wall -Werror -ggdb -Wno-format-zero-length
+cflags = -fsanitize=undefined -Wall -Werror -ggdb -Wno-format-zero-length -Wno-unused-function
 
 .PHONY: all
 all: xcc

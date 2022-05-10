@@ -3,9 +3,18 @@
 static Type *type_list_head = NULL;
 static Type *type_list_tail = NULL;
 
+static void initialise_type(Type *new_type) {
+    new_type->next_type = NULL;
+    new_type->function_param_types = NULL;
+    new_type->underlying = NULL;
+    new_type->is_const = false;
+    new_type->is_volatile = false;
+    new_type->is_restrict = false;
+}
+
 static Type *type_new(void) {
     Type *new_type = xcc_malloc(sizeof(Type));
-    new_type->next_type = NULL;
+    initialise_type(new_type);
 
     if(!type_list_head) {
         type_list_head = new_type;
@@ -19,50 +28,37 @@ static Type *type_new(void) {
     return new_type;
 }
 
-static Type *try_make_common_int_type(TypeInteger integer_type, bool is_const) {
-    // TODO: this is ugly
+static Type prebuilt_integer_types[TYPE_INTEGER_LAST * 4];
+static bool prebuilt_integer_types_created = false;
 
-    static bool has_initialised_types = false;
-    static bool is_initialising_types = false;
-
-    if (is_initialising_types) {
-        return NULL;
+static void create_prebuilt_integer_types(void) {
+    for (int int_type = 0; int_type < TYPE_INTEGER_LAST; ++int_type) {
+        for (int qualifiers = 0; qualifiers < 4; ++qualifiers) {
+            Type *t = &prebuilt_integer_types[int_type << 2 | qualifiers];
+            initialise_type(t);
+            t->integer_type = int_type;
+            t->type_type = TYPE_INTEGER;
+            t->is_const = qualifiers & 1;
+            t->is_volatile = qualifiers & 2;
+            t->is_restrict = false;
+        }
     }
-
-    static Type *nonconst_int;
-    static Type *const_int;
-    static Type *nonconst_char;
-    static Type *const_char;
-
-
-    if (!has_initialised_types) {
-        is_initialising_types = true;
-
-        nonconst_int = type_new_int(TYPE_INT, false);
-        const_int = type_new_int(TYPE_INT, true);
-
-        nonconst_char = type_new_int(TYPE_CHAR, false);
-        const_char = type_new_int(TYPE_CHAR, true);
-
-        has_initialised_types = true;
-    }
-
-    if (integer_type == TYPE_INT && !is_const) {
-        return nonconst_int;
-    } else if (integer_type == TYPE_INT && is_const) {
-        return const_int;
-    } else if (integer_type == TYPE_CHAR && !is_const) {
-        return nonconst_char;
-    } else if (integer_type == TYPE_CHAR && is_const) {
-        return const_char;
-    }
-
-    return NULL;
 }
 
-Type *type_new_int(TypeInteger integer_type, bool is_const) {
+static Type *try_make_common_int_type(TypeInteger integer_type, bool is_const, bool is_volatile) {
+    if (!prebuilt_integer_types_created) {
+        create_prebuilt_integer_types();
+        prebuilt_integer_types_created = true;
+    }
+
+    int index = is_const << 0 | is_volatile << 1 | integer_type << 2;
+
+    return &prebuilt_integer_types[index];
+}
+
+Type *type_new_int(TypeInteger integer_type, bool is_const, bool is_volatile) {
     Type *possible_common_type = try_make_common_int_type(
-        integer_type, is_const
+        integer_type, is_const, is_volatile
     );
     if (possible_common_type) {
         return possible_common_type;
@@ -73,19 +69,18 @@ Type *type_new_int(TypeInteger integer_type, bool is_const) {
     new_type->type_type = TYPE_INTEGER;
     new_type->integer_type = integer_type;
     new_type->is_const = is_const;
-    new_type->underlying = NULL;
+    new_type->is_volatile = is_volatile;
+    new_type->is_restrict = false;
 
     return new_type;
 }
 
-static Type *type_new_void() {
-    static Type *void_type;
+static Type *type_new_void(void) {
+    static Type *void_type = NULL;
 
     if (void_type == NULL) {
         void_type = type_new();
         void_type->type_type = TYPE_VOID;
-        void_type->is_const = false;
-        void_type->underlying = NULL;
     }
 
     return void_type;
@@ -97,19 +92,34 @@ static Type *copy_type(Type *type) {
     new_type->type_type = type->type_type;
     new_type->integer_type = type->integer_type;
     new_type->is_const = type->is_const;
+    new_type->is_volatile = type->is_volatile;
+    new_type->is_restrict = type->is_restrict;
     new_type->array_size = type->array_size;
     new_type->underlying = type->underlying;
+    new_type->function_param_types = type->function_param_types;
     new_type->next_type = type->next_type;
 
     return new_type;
 }
 
-static Type *make_unqualified_type(Type *type) {
-    if (type->is_const) {
-        Type *new_type = copy_type(type);
+static bool is_type_qualified(Type *type) {
+    return type->is_const || type->is_volatile || type->is_restrict;
+}
 
-        new_type->is_const = false;
-        return new_type;
+static Type *make_unqualified_type(Type *type) {
+    if (is_type_qualified(type)) {
+        if (type->type_type == TYPE_VOID) {
+            return type_new_void();
+        } else if (type->type_type == TYPE_INTEGER) {
+            return type_new_int(type->integer_type, 0, 0);
+        } else {
+            Type *new_type = copy_type(type);
+
+            new_type->is_const = false;
+            new_type->is_volatile = false;
+            new_type->is_restrict = false;
+            return new_type;
+        }
     } else {
         return type;
     }
@@ -123,6 +133,12 @@ static bool types_are_compatible(Type *t, Type *u) {
     xcc_assert(u);
 
     if(t->is_const != u->is_const) {
+        return false;
+    }
+    if(t->is_volatile != u->is_volatile) {
+        return false;
+    }
+    if(t->is_restrict != u->is_restrict) {
         return false;
     }
 
@@ -141,7 +157,7 @@ static bool types_are_compatible(Type *t, Type *u) {
             return true;
         }
 
-        return t->array_size == u->array_size;
+        return t->array_size == u->array_size && types_are_compatible(t->underlying, u->underlying);
     }
 
     if (has_same_type_type && t->type_type == TYPE_STRUCT) {
@@ -178,6 +194,8 @@ static int get_integer_rank(TypeInteger integer_type) {
 
         case TYPE_LONG_LONG:
         case TYPE_ULONG_LONG: return 20;
+
+        case TYPE_INTEGER_LAST: xcc_assert_not_reached();
     }
 
     xcc_assert_not_reached();
@@ -210,6 +228,8 @@ bool integer_type_is_signed(Type *type) {
 
         case TYPE_LONG_LONG: return true;
         case TYPE_ULONG_LONG: return false;
+
+        case TYPE_INTEGER_LAST: xcc_assert_not_reached();
     }
 
     xcc_assert_not_reached();
@@ -219,7 +239,7 @@ static bool is_scalar_type(Type *type) {
     TypeType type_type = type->type_type; // type type type type type type type
 
     // TODO: TYPE_FLOAT
-    return type_type == TYPE_INTEGER || type_type == TYPE_POINTER;
+    return type_type == TYPE_INTEGER || type_type == TYPE_POINTER || type_type == TYPE_ENUM;
 }
 
 static AST* add_conversion_in_ast(AST **ast_ptr, ASTType ast_type) {
@@ -237,9 +257,9 @@ static AST* add_conversion_in_ast(AST **ast_ptr, ASTType ast_type) {
 static Type *promote_integer(Type *type) {
     if (get_integer_rank_from_type(type) <= get_integer_rank(TYPE_INT)) {
         if (integer_type_is_signed(type)) {
-            return type_new_int(TYPE_INT, type->is_const);
+            return type_new_int(TYPE_INT, type->is_const, type->is_volatile);
         } else {
-            return type_new_int(TYPE_UINT, type->is_const);
+            return type_new_int(TYPE_UINT, type->is_const, type->is_volatile);
         }
     }
 
@@ -288,7 +308,7 @@ static void implicitly_convert(AST **expr_ptr, Type *desired) {
 }
 
 static void use_as_rvalue(AST *expr) {
-    if (expr->value_type->is_const) {
+    if (is_type_qualified(expr->value_type)) {
         expr->value_type = make_unqualified_type(expr->value_type);
     }
 }
@@ -366,122 +386,283 @@ static void handle_comparison_operator(AST *parent_expr) {
     perform_binary_arithmetic_conversion(parent_expr);
     xcc_assert(parent_expr->value_type);
     // comparison results are always an int
-    parent_expr->value_type = type_new_int(TYPE_INT, false);
+    parent_expr->value_type = type_new_int(TYPE_INT, 0, 0);
 }
 
 #define TYPE_PROPOGATE_RECURSE(ast) for(int i = 0; i < (ast)->num_nodes; ++i) { type_propogate(ast->nodes[i]); }
 
-void type_propogate(AST *ast) {
-    xcc_assert(ast->value_type == NULL);
+static void check_main_function(AST *ast) {
+    Type *function_type = ast->declaration->type;
+    xcc_assert(function_type);
 
+    if (!types_are_compatible(function_type->underlying, type_new_int(TYPE_INT, false, false))) {
+        prog_error_ast("main should return an int!", ast);
+    }
+
+    if (function_type->array_size != 0) {
+        prog_error_ast("main shouldn't accept any arguments!", ast);
+    }
+
+    AST *return_statement = ast_append_new(ast->nodes[2], AST_RETURN_STMT, ast->main_token);
+    return_statement->declaration = ast->declaration;
+    AST *literal_0 = ast_append_new(return_statement, AST_INTEGER_LITERAL, ast->main_token);
+    literal_0->integer_literal_val = 0;
+}
+
+static void handle_declaration(AST *ast) {
+    xcc_assert(ast->type == AST_DECLARATION || ast->type == AST_FUNCTION_DEFINITION || ast->type == AST_PARAMETER);
+    xcc_assert(ast->num_nodes >= 1);
+
+    type_propogate(ast->nodes[0]);
+    Type *base_type = ast->nodes[0]->value_type;
+
+    if (ast->type == AST_FUNCTION_DEFINITION) {
+        xcc_assert(ast->num_nodes == 3);
+
+        ast->nodes[1]->value_type = base_type;
+        type_propogate(ast->nodes[1]); // DECLARATOR_GROUP
+
+
+        // implicit return for void return and main()
+        // doesn't really make sense to put it here but why not
+        Type *function_type = ast->declaration->type;
+        xcc_assert(function_type);
+
+        if (function_type->type_type != TYPE_FUNCTION) {
+            prog_error_ast("invalid function definition", ast);
+        }
+
+        if (function_type->underlying->type_type == TYPE_FUNCTION) {
+            prog_error_ast("can't return a bare function", ast);
+        }
+        for (int i = 0; i < function_type->array_size; ++i) {
+            if (function_type->function_param_types[i]->type_type == TYPE_FUNCTION) {
+                prog_error_ast("can't have a bare function as a parameter", ast);
+            }
+        }
+
+        if (function_type->underlying->type_type == TYPE_VOID) {
+            AST *return_statement = ast_append_new(ast->nodes[2], AST_RETURN_STMT, ast->main_token);
+            return_statement->declaration = ast->declaration;
+        }
+        if (!strcmp(ast->declaration->name, "main")) {
+            check_main_function(ast);
+        }
+
+        type_propogate(ast->nodes[2]); // BLOCK_STATEMENT
+    } else if (ast->type == AST_PARAMETER) {
+        xcc_assert(ast->num_nodes == 2);
+
+        ast->nodes[1]->value_type = base_type;
+        type_propogate(ast->nodes[1]); // DECLARATOR_GROUP
+        ast->value_type = ast->nodes[1]->declaration->type;
+    } else {
+        for (int i = 1; i < ast->num_nodes; ++i) {
+            ast->nodes[i]->value_type = base_type;
+            type_propogate(ast->nodes[i]);
+        }
+    }
+}
+
+static int count_specifiers(AST *ast, TokenType token_type, bool allow_duplicates) {
+    int count = 0;
+
+    AST *last_matching_node = NULL;
+
+    for (int i = 0; i < ast->num_nodes; ++i) {
+        xcc_assert(ast->nodes[i]->type == AST_DECLARATION_SPECIFIER);
+        if (ast->nodes[i]->main_token->type == token_type) {
+            last_matching_node = ast->nodes[i];
+            count++;
+        }
+    }
+
+    if (count > 1 && !allow_duplicates) {
+        prog_error_ast("duplicate specifier", last_matching_node);
+    }
+
+    return count;
+}
+
+static void handle_declaration_specifiers(AST *ast) {
+    // TODO: handle the case where there isn't an int...
+
+    xcc_assert(ast->type == AST_DECLARATION_SPECIFIERS);
+    if (ast->num_nodes < 1) {
+        prog_error_ast("not type specified (and I won't assume int...)", ast);
+    }
+
+
+    int void_count = count_specifiers(ast, TOK_KEYWORD_VOID, false);
+
+    int signed_count = count_specifiers(ast, TOK_KEYWORD_SIGNED, false);
+    int unsigned_count = count_specifiers(ast, TOK_KEYWORD_UNSIGNED, false);
+    if (unsigned_count && signed_count) {
+        prog_error_ast("both signed and unsigned in type specifier", ast);
+    }
+
+    int char_count = count_specifiers(ast, TOK_KEYWORD_CHAR, false);
+    int short_count = count_specifiers(ast, TOK_KEYWORD_SHORT, false);
+    int int_count = count_specifiers(ast, TOK_KEYWORD_INT, false);
+    int long_count = count_specifiers(ast, TOK_KEYWORD_LONG, true);
+    if (long_count > 2) {
+        prog_error_ast("more than two 'long's in type specifier", ast);
+    }
+
+    int total_types_count = char_count + short_count + int_count + !!long_count + void_count;
+    if (total_types_count > 1) {
+        prog_error_ast("too many types in specifier", ast);
+    }
+
+    if (void_count) {
+        if (signed_count || unsigned_count) {
+            prog_error_ast("void doesn't have signedness!", ast);
+        }
+        ast->value_type = type_new_void();
+        return;
+    }
+
+    TypeInteger integer_type;
+
+    if (char_count) {
+        if (signed_count) {
+            integer_type = TYPE_SCHAR;
+        } else if (unsigned_count) {
+            integer_type = TYPE_UCHAR;
+        } else {
+            integer_type = TYPE_CHAR;
+        }
+    } else if (short_count) {
+        if (unsigned_count) {
+            integer_type = TYPE_USHORT;
+        } else {
+            integer_type = TYPE_SHORT;
+        }
+    } else if (long_count == 2) {
+        if (unsigned_count) {
+            integer_type = TYPE_ULONG_LONG;
+        } else {
+            integer_type = TYPE_LONG_LONG;
+        }
+    } else if (long_count == 1) {
+        if (unsigned_count) {
+            integer_type = TYPE_ULONG;
+        } else {
+            integer_type = TYPE_LONG;
+        }
+    } else if (unsigned_count) {
+        integer_type = TYPE_UINT;
+    } else if (signed_count || int_count) {
+        integer_type = TYPE_INT;
+    } else {
+        prog_error_ast("unknown type specification", ast);
+    }
+
+    // TODO: handle qualifiers
+    ast->value_type = type_new_int(integer_type, false, false);
+}
+
+static void handle_declarator_group(AST *ast) {
+    xcc_assert(ast->type == AST_DECLARATOR_GROUP);
+
+    xcc_assert(ast->num_nodes >= 1 && ast->num_nodes <= 2);
+    xcc_assert(ast->value_type); // type given to us by the AST_DECLARATION from the base type
+
+    xcc_assert(ast->declaration);
+    xcc_assert(!ast->declaration->type);
+
+    ast->nodes[0]->value_type = ast->value_type;
+    type_propogate(ast->nodes[0]);
+
+    xcc_assert(ast->declaration->type);
+
+    if (ast->num_nodes == 2) {
+        // has initialiser
+        type_propogate(ast->nodes[1]);
+        implicitly_convert(&ast->nodes[1], ast->declaration->type);
+    }
+}
+
+static void handle_declarator_ident(AST *ast) {
+    xcc_assert(ast->type == AST_DECLARATOR_IDENT);
+    xcc_assert(ast->value_type);
+    xcc_assert(ast->declaration);
+
+    ast->declaration->type = ast->value_type;
+}
+
+static void handle_declarator_func(AST *ast) {
+    xcc_assert(ast->type == AST_DECLARATOR_FUNC);
+    xcc_assert(ast->value_type);
+    xcc_assert(ast->num_nodes >= 1);
+
+    Type *return_type = ast->value_type;
+    int num_params = ast->num_nodes - 1;
+
+    Type **paramater_types = xcc_malloc(sizeof(Type *) * num_params);
+    for (int i = 0; i < num_params; ++i) {
+        type_propogate(ast->nodes[i + 1]);
+        paramater_types[i] = ast->nodes[i + 1]->value_type;
+    }
+
+    Type *function_type = type_new();
+    function_type->type_type = TYPE_FUNCTION;
+    function_type->underlying = return_type;
+    function_type->function_param_types = paramater_types;
+    function_type->array_size = num_params;
+
+    ast->nodes[0]->value_type = function_type;
+    type_propogate(ast->nodes[0]);
+}
+
+static void handle_call(AST *ast) {
+    xcc_assert(ast->num_nodes >= 1);
+
+    TYPE_PROPOGATE_RECURSE(ast);
+
+    // TODO: handle function pointers
+
+    if (ast->nodes[0]->type != AST_IDENT_USE) {
+        prog_error_ast("can't use this to call", ast->nodes[0]);
+    }
+
+    Type *function_type = ast->nodes[0]->value_type;
+
+    if (function_type->type_type != TYPE_FUNCTION) {
+        prog_error_ast("can only call functions", ast->nodes[0]);
+    }
+
+    int num_params = ast->num_nodes - 1;
+    if (function_type->array_size != num_params) {
+        prog_error_ast("mimsatch in number of parameters in call", ast);
+    }
+
+    for (int i = 0; i < ast->num_nodes - 1; ++i) {
+        implicitly_convert(&ast->nodes[i + 1], function_type->function_param_types[i]);
+    }
+
+    ast->value_type = ast->nodes[0]->value_type->underlying;
+}
+
+void type_propogate(AST *ast) {
     if (ast->type == AST_PROGRAM) {
         TYPE_PROPOGATE_RECURSE(ast);
-    } else if (ast->type == AST_FUNCTION_PROTOTYPE || ast->type == AST_FUNCTION) {
-        xcc_assert(ast->num_nodes >= 2);
-
-        // return type
-        type_propogate(ast->nodes[0]);
-        xcc_assert(ast->nodes[0]->value_type);
-        // param list
-        type_propogate(ast->nodes[1]);
-
-
-        xcc_assert(ast->function_res);
-
-        // I think this check is also done as well at the resolution stage...
-        xcc_assert(ast->function_res->num_arguments == ast->nodes[1]->num_nodes);
-
-        if (ast->function_res->return_type) {
-            for (int i = 0; i < ast->function_res->num_arguments; ++i) {
-                Type *this_arg_type = ast->nodes[1]->nodes[i]->value_type;
-                xcc_assert(this_arg_type);
-
-                Type *other_arg_type = ast->function_res->argument_types[i];
-
-                if (!types_are_compatible(this_arg_type, other_arg_type)) {
-                    prog_error_ast(
-                        "Incompatible arg type!", ast->nodes[1]->nodes[i]
-                    );
-                }
-            }
-
-            Type *this_return_type = ast->nodes[0]->value_type;
-            Type *other_return_type = ast->function_res->return_type;
-            xcc_assert(other_return_type);
-
-            if(!types_are_compatible(other_return_type, this_return_type)) {
-                prog_error_ast("Incompatible return type type!", ast->nodes[0]);
-            }
-        } else {
-            ast->function_res->argument_types = xcc_malloc(
-                sizeof(Type *) * ast->function_res->num_arguments
-            );
-
-            for (int i = 0; i < ast->function_res->num_arguments; ++i) {
-                Type *this_arg_type = ast->nodes[1]->nodes[i]->value_type;
-                xcc_assert(this_arg_type);
-
-                ast->function_res->argument_types[i] = this_arg_type;
-            }
-
-            ast->function_res->return_type = ast->nodes[0]->value_type;
-        }
-
-        if (ast->type == AST_FUNCTION) {
-            xcc_assert(ast->num_nodes == 3);
-
-            // insert implicit return at end of void functions
-            if (ast->function_res->return_type->type_type == TYPE_VOID) {
-                AST *new_return_stmt = ast_append_new(
-                    ast->nodes[2], AST_RETURN_STMT, ast->main_token
-                );
-                new_return_stmt->function_res = ast->function_res;
-            }
-
-            type_propogate(ast->nodes[2]);
-        } else {
-            xcc_assert(ast->type == AST_FUNCTION_PROTOTYPE);
-            xcc_assert(ast->num_nodes == 2);
-        }
-    } else if (ast->type == AST_FUNC_DECL_PARAM_LIST) {
-        // not much to do here i think
-        TYPE_PROPOGATE_RECURSE(ast);
-    } else if (ast->type == AST_VAR_DECLARE) {
-        xcc_assert(ast->num_nodes >= 1);
-        xcc_assert(ast->num_nodes <= 2);
-
-        type_propogate(ast->nodes[0]);
-        xcc_assert(ast->nodes[0]->value_type);
-
-        if (ast->num_nodes == 2) {
-            type_propogate(ast->nodes[1]);
-            implicitly_convert(&ast->nodes[1], ast->nodes[0]->value_type);
-        }
-
-        xcc_assert(ast->var_res);
-        xcc_assert(!ast->var_res->var_type);
-
-        ast->var_res->var_type = ast->nodes[0]->value_type;
-    } else if (ast->type == AST_VAR_USE) {
-        xcc_assert(ast->num_nodes == 0);
-
-        xcc_assert(ast->var_res);
-        xcc_assert(ast->var_res->var_type);
-
-        ast->value_type = ast->var_res->var_type;
+    } else if (ast->type == AST_DECLARATION || ast->type == AST_FUNCTION_DEFINITION || ast->type == AST_PARAMETER) {
+        handle_declaration(ast);
+    } else if (ast->type == AST_DECLARATION_SPECIFIERS) {
+        handle_declaration_specifiers(ast);
+    } else if (ast->type == AST_DECLARATOR_IDENT) {
+        handle_declarator_ident(ast);
+    } else if (ast->type == AST_DECLARATOR_GROUP) {
+        handle_declarator_group(ast);
+    } else if (ast->type == AST_DECLARATOR_FUNC) {
+        handle_declarator_func(ast);
     } else if (ast->type == AST_CALL) {
-        // not much to do here i think
-        TYPE_PROPOGATE_RECURSE(ast);
-
-        xcc_assert(ast->function_res);
-        xcc_assert(ast->num_nodes == ast->function_res->num_arguments);
-        xcc_assert(ast->function_res->return_type);
-
-        for (int i = 0; i < ast->num_nodes; ++i) {
-            implicitly_convert(&ast->nodes[i], ast->function_res->argument_types[i]);
-        }
-
-        ast->value_type = ast->function_res->return_type;
+        handle_call(ast);
+    } else if (ast->type == AST_IDENT_USE) {
+        xcc_assert(ast->declaration);
+        xcc_assert(ast->declaration->type);
+        ast->value_type = ast->declaration->type;
     } else if (ast->type == AST_ASSIGN) {
         // lvalue checking is done in check_lvalue.c
         xcc_assert(ast->num_nodes == 2);
@@ -498,47 +679,22 @@ void type_propogate(AST *ast) {
         implicitly_convert(&ast->nodes[1], var_type);
 
         ast->value_type = var_type;
-    } else if (ast->type == AST_PARAMETER) {
-        xcc_assert(ast->num_nodes == 1);
-        type_propogate(ast->nodes[0]);
-
-        xcc_assert(ast->nodes[0]->value_type);
-        ast->value_type = ast->nodes[0]->value_type;
-
-        // AST_PARAMETERs on prototypes don't have a resolution
-        if (ast->var_res) {
-            xcc_assert(!ast->var_res->var_type);
-
-            ast->var_res->var_type = ast->nodes[0]->value_type;
-        }
-    } else if (ast->type == AST_TYPE) {
-        // TODO: do this better
-        xcc_assert(ast->num_nodes == 1);
-
-        if (ast->nodes[0]->type == AST_TYPE_INT) {
-            ast->value_type = type_new_int(TYPE_INT, false);
-        } else if (ast->nodes[0]->type == AST_TYPE_CHAR) {
-            ast->value_type = type_new_int(TYPE_CHAR, false);
-        } else if (ast->nodes[0]->type == AST_TYPE_VOID) {
-            ast->value_type = type_new_void();
-        } else {
-            xcc_assert_not_reached_msg("invalid contents of AST_TYPE");
-        }
     } else if (ast->type == AST_INTEGER_LITERAL) {
-        ast->value_type = type_new_int(TYPE_INT, false);
+        ast->value_type = type_new_int(TYPE_INT, false, false);
     } else if (ast->type == AST_RETURN_STMT) {
+        xcc_assert(ast->declaration);
+        xcc_assert(ast->declaration->type);
+        Type *return_type = ast->declaration->type->underlying;
+
         if (ast->num_nodes == 1) {
             type_propogate(ast->nodes[0]);
 
-            xcc_assert(ast->function_res);
-            Type *return_type = ast->function_res->return_type;
-            xcc_assert(return_type);
 
             implicitly_convert(&ast->nodes[0], return_type);
         } else {
             xcc_assert(ast->num_nodes == 0);
 
-            if (ast->function_res->return_type->type_type != TYPE_VOID) {
+            if (return_type->type_type != TYPE_VOID) {
                 prog_error_ast("empty return in non-void function", ast);
             }
         }
@@ -568,8 +724,6 @@ void type_propogate(AST *ast) {
         handle_comparison_operator(ast);
     } else if (ast->type == AST_STATEMENT_EXPRESSION) {
         TYPE_PROPOGATE_RECURSE(ast); // nothing to do here
-    } else if (ast->type == AST_BODY) {
-        TYPE_PROPOGATE_RECURSE(ast);
     } else if (ast->type == AST_BLOCK_STATEMENT) {
         TYPE_PROPOGATE_RECURSE(ast);
     } else if (ast->type == AST_IF) {
@@ -596,7 +750,12 @@ void type_free_all() {
 
     while(type) {
         Type *next_type = type->next_type;
+
+        if (type->function_param_types) {
+            xcc_free(type->function_param_types);
+        }
         xcc_free(type);
+
         type = next_type;
     }
 }
@@ -617,25 +776,42 @@ static const char *int_type_to_string(Type *type) {
         case TYPE_ULONG: return "unsigned long";
         case TYPE_LONG_LONG: return "long long";
         case TYPE_ULONG_LONG: return "unsigned long long";
+        case TYPE_INTEGER_LAST: xcc_assert_not_reached();
     }
 
     xcc_assert_not_reached();
 }
 
 void type_dump(Type *type) {
-    fprintf(stderr, "[TYPE ");
+    // fprintf(stderr, "[");
 
     if (type->is_const) {
         fprintf(stderr, "const ");
+    }
+    if (type->is_volatile) {
+        fprintf(stderr, "volatile ");
+    }
+    if (type->is_restrict) {
+        fprintf(stderr, "restrict ");
     }
 
     if(type->type_type == TYPE_INTEGER) {
         fprintf(stderr, "%s", int_type_to_string(type));
     } else if (type->type_type == TYPE_VOID) {
         fprintf(stderr, "void");
+    } else if (type->type_type == TYPE_FUNCTION) {
+        fprintf(stderr, "(");
+        for (int i = 0; i < type->array_size; ++i) {
+            if (i != 0) {
+                fprintf(stderr, ", ");
+            }
+            type_dump(type->function_param_types[i]);
+        }
+        fprintf(stderr, ") -> ");
+        type_dump(type->underlying);
     } else {
         xcc_assert_not_reached();
     }
 
-    fprintf(stderr, "]");
+    // fprintf(stderr, "]");
 }

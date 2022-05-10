@@ -2,11 +2,16 @@
 #include "xcc.h"
 
 typedef enum {
-    AST_PROGRAM, AST_FUNCTION, AST_FUNCTION_PROTOTYPE,
-    AST_PARAMETER, AST_FUNC_DECL_PARAM_LIST,
+    AST_PROGRAM,
 
-    AST_BODY, AST_RETURN_STMT, AST_STATEMENT_EXPRESSION,
-    AST_VAR_DECLARE, AST_VAR_USE, AST_ASSIGN,
+    AST_DECLARATION, AST_FUNCTION_DEFINITION,
+    AST_DECLARATION_SPECIFIERS, AST_DECLARATION_SPECIFIER,
+    AST_DECLARATOR_IDENT, AST_DECLARATOR_POINTER,
+    AST_DECLARATOR_ARRAY, AST_DECLARATOR_FUNC,
+    AST_DECLARATOR_GROUP, AST_PARAMETER,
+
+    AST_RETURN_STMT, AST_STATEMENT_EXPRESSION,
+    AST_IDENT_USE, AST_ASSIGN,
 
     AST_TYPE, AST_TYPE_INT, AST_TYPE_VOID,
     AST_TYPE_CHAR,
@@ -25,8 +30,7 @@ typedef enum {
 
 struct AST;
 struct ValuePosition;
-struct FunctionResolution;
-struct VariableResolution;
+struct Declaration;
 struct Type;
 typedef struct AST {
     ASTType type;
@@ -45,11 +49,7 @@ typedef struct AST {
         int block_max_stack_depth;
     };
 
-    union {
-        struct FunctionResolution *function_res;
-        struct VariableResolution *var_res;
-        void *unknown_resolution;
-    };
+    struct Declaration *declaration;
 } AST;
 
 
