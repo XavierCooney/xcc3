@@ -79,6 +79,7 @@ const char *ast_node_type_to_str(ASTType type) {
         case AST_DIVIDE: return "DIVIDE";
         case AST_REMAINDER: return "REMAINDER";
         case AST_CALL: return "CALL";
+        case AST_DEREFERENCE: return "DEREFERENCE";
         case AST_STATEMENT_EXPRESSION: return "STATEMENT_EXPRESSION";
         case AST_IDENT_USE: return "IDENT_USE";
         case AST_ASSIGN: return "ASSIGN";

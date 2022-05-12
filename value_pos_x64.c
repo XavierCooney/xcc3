@@ -22,6 +22,7 @@ static bool is_expression_node(AST *ast) {
     is_expression = is_expression || t == AST_DIVIDE;
     is_expression = is_expression || t == AST_CMP_LT || t == AST_CMP_GT;
     is_expression = is_expression || t == AST_CMP_LT_EQ || t == AST_CMP_GT_EQ;
+    is_expression = is_expression || t == AST_DEREFERENCE;
 
     if (is_expression) {
         xcc_assert(ast->value_type != NULL);
@@ -93,7 +94,7 @@ static int get_type_signedness(Type *type) {
 }
 
 static void set_value_pos_to_type(ValuePosition *pos, Type *type) {
-    if (type->type_type == TYPE_INTEGER) {
+    if (type->type_type == TYPE_INTEGER || type->type_type == TYPE_POINTER) {
         pos->size = get_type_size(type);
         pos->alignment = get_type_alignment(type);
         pos->is_signed = get_type_signedness(type);
@@ -221,41 +222,51 @@ bool value_pos_is_same(ValuePosition *a, ValuePosition *b) {
     }
 }
 
-#define REG_PREALLOCATED_MAX_SIZE 8
+#define REG_PREALLOCATED_MAX_SIZE 4 // 2^3
 // TODO: this is wildly inefficient, but works and isn't that impactful...
-static ValuePosition *preallocated_positions = NULL;
+static ValuePosition preallocated_reg_positions[REG_LAST * REG_PREALLOCATED_MAX_SIZE * 2];
+bool allocated_preallocated_position = false;
 
-// TODO: make this work for unsigned types
-ValuePosition *value_pos_reg(RegLoc location, int reg_size) {
-    if(preallocated_positions == NULL) {
-        preallocated_positions = xcc_malloc(
-            sizeof(ValuePosition) * REG_LAST * REG_PREALLOCATED_MAX_SIZE
-        );
-
-        for(int reg_num = 0; reg_num < REG_LAST; ++reg_num) {
-            for (int size = 1; size <= REG_PREALLOCATED_MAX_SIZE; ++size) {
-                int index = reg_num * REG_PREALLOCATED_MAX_SIZE + (size - 1);
-                ValuePosition *pos = &preallocated_positions[index];
+static void allocate_reg_positions(void) {
+    for(int reg_num = 0; reg_num < REG_LAST; ++reg_num) {
+        for (int size = 0; size < REG_PREALLOCATED_MAX_SIZE; ++size) {
+            for (int is_signed = 0; is_signed <= 1; ++is_signed) {
+                int index = (reg_num * REG_PREALLOCATED_MAX_SIZE + size) * 2 + is_signed;
+                ValuePosition *pos = &preallocated_reg_positions[index];
                 pos->type = POS_REG;
                 pos->register_num = reg_num;
-                pos->size = size;
-                // this is a bit of an assumption that happens to work for x64
-                pos->alignment = size;
-                pos->is_signed = true; // wat
+                pos->size = 1 << size;
+                pos->alignment = pos->size;
+                pos->is_signed = is_signed;
             }
         }
     }
-
-    xcc_assert(location < REG_LAST);
-    xcc_assert(reg_size >= 1 && reg_size <= REG_PREALLOCATED_MAX_SIZE);
-    int preallocated_index = location * REG_PREALLOCATED_MAX_SIZE + (reg_size - 1);
-    return &preallocated_positions[preallocated_index];
+    allocated_preallocated_position = true;
 }
 
-void value_pos_free_preallocated() {
-    if(preallocated_positions) {
-        xcc_free(preallocated_positions);
+ValuePosition *value_pos_reg(RegLoc location, int reg_size, bool is_signed) {
+    if(!allocated_preallocated_position) {
+        allocate_reg_positions();
     }
+
+    xcc_assert(location < REG_LAST);
+
+    int size_index;
+    // TODO: using something like __builtin_ctz?
+    if (reg_size == 1) {
+        size_index = 0;
+    } else if (reg_size == 2) {
+        size_index = 1;
+    } else if (reg_size == 4) {
+        size_index = 2;
+    } else if (reg_size == 8) {
+        size_index = 3;
+    } else {
+        xcc_assert_not_reached();
+    }
+
+    int preallocated_index = (location * REG_PREALLOCATED_MAX_SIZE + size_index) * 2 + is_signed;
+    return &preallocated_reg_positions[preallocated_index];
 }
 
 void value_pos_dump(ValuePosition *value_pos) {

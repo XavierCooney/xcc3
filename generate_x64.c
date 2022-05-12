@@ -150,7 +150,7 @@ static void move_value_raw(ValuePosition *a, ValuePosition *b) {
 
 static ValuePosition *move_value_into_temp_reg(ValuePosition *pos) {
     // This is done unconditionally, even if it's not necessary
-    ValuePosition *temp_reg = value_pos_reg(REG_R11, pos->size);
+    ValuePosition *temp_reg = value_pos_reg(REG_R11, pos->size, pos->is_signed);
 
     move_value_raw(pos, temp_reg);
     return temp_reg;
@@ -284,7 +284,7 @@ static void generate_multiply_expression(GenContext *ctx, AST *ast) {
     // rather than all on the stack, there should be a way of indicating
     // which instructions will use up RAX and other registers.
 
-    ValuePosition *multiplication_reg = value_pos_reg(REG_RAX, dest->size);
+    ValuePosition *multiplication_reg = value_pos_reg(REG_RAX, dest->size, dest->is_signed);
 
     generate_move(a, multiplication_reg);
     generate_asm_partial("imul");
@@ -311,10 +311,13 @@ static void generate_comparison_expression(GenContext *ctx, AST *ast) {
     ValuePosition *b = ast->nodes[1]->pos;
     ValuePosition *dest = ast->pos;
 
-    generate_asm_partial("xorl ");
-    generate_asm_pos(value_pos_reg(comparison_register, 4));
+    int is_signed = dest->is_signed;
+
+    generate_asm_partial("xorq ");
+    generate_asm_partial(" ");
+    generate_asm_pos(value_pos_reg(comparison_register, 8, is_signed));
     generate_asm_partial(", ");
-    generate_asm_pos(value_pos_reg(comparison_register, 4));
+    generate_asm_pos(value_pos_reg(comparison_register, 8, is_signed));
     generate_asm("");
 
     a = possibly_move_to_temp(a, b);
@@ -341,10 +344,10 @@ static void generate_comparison_expression(GenContext *ctx, AST *ast) {
     }
 
     generate_asm_partial(" ");
-    generate_asm_pos(value_pos_reg(comparison_register, 1));
+    generate_asm_pos(value_pos_reg(comparison_register, 1, is_signed));
     generate_asm("");
 
-    generate_move(value_pos_reg(comparison_register, 4), dest);
+    generate_move(value_pos_reg(comparison_register, dest->size, is_signed), dest);
 }
 
 static RegLoc argument_index_to_register(int index) {
@@ -373,14 +376,16 @@ static void generate_call_expression(GenContext *ctx, AST *ast) {
         generate_expression(ctx, argument_ast);
 
         RegLoc arg_reg = argument_index_to_register(i - 1);
-        generate_move(argument_ast->pos, value_pos_reg(arg_reg, argument_ast->pos->size));
+        generate_move(argument_ast->pos, value_pos_reg(
+            arg_reg, argument_ast->pos->size, argument_ast->pos->is_signed
+        ));
     }
 
     generate_asm_partial("call ");
     generate_asm(ast->nodes[0]->pos->func_name);
 
     if (ast->pos->type != POS_VOID) {
-        generate_move(value_pos_reg(REG_RAX, ast->pos->size), ast->pos);
+        generate_move(value_pos_reg(REG_RAX, ast->pos->size, ast->pos->is_signed), ast->pos);
     }
 }
 
@@ -422,7 +427,7 @@ static void generate_int_conversion(GenContext *ctx, AST *ast) {
         ValuePosition *to_reg = NULL;
 
         if (val_pos_is_memory(to)) {
-            to_reg = value_pos_reg(REG_R11, to->size);
+            to_reg = value_pos_reg(REG_R11, to->size, to->is_signed);
             generate_asm_pos(to_reg);
         } else {
             generate_asm_pos(to);
@@ -448,6 +453,38 @@ static void generate_int_conversion(GenContext *ctx, AST *ast) {
             generate_move(&truncated_from, to);
         }
 
+    }
+}
+
+static void generate_dereference(GenContext *ctx, AST *ast) {
+    xcc_assert(ast->type == AST_DEREFERENCE);
+    xcc_assert(ast->num_nodes == 1);
+
+    generate_expression(ctx, ast->nodes[0]);
+
+    ValuePosition *from = ast->nodes[0]->pos;
+    ValuePosition *to = ast->pos;
+
+    if (val_pos_is_memory(from)) {
+        from = move_value_into_temp_reg(from);
+    }
+    xcc_assert(from->type = POS_REG); // TODO: there are other cases to think about
+
+    ValuePosition *to_temp = to;
+    if (val_pos_is_memory(to_temp)) {
+        to_temp = value_pos_reg(REG_R11, to->size, to->is_signed);;
+    }
+
+    generate_asm_partial("mov");
+    generate_size_suffix(to->size);
+    generate_asm_partial(" ("); // TODO: does this always work?
+    generate_asm_pos(from);
+    generate_asm_partial("), ");
+    generate_asm_pos(to_temp);
+    generate_asm("");
+
+    if (!value_pos_is_same(to, to_temp)) {
+        move_value_raw(to_temp, to);
     }
 }
 
@@ -492,6 +529,8 @@ static void generate_expression(GenContext *ctx, AST *ast) {
         }
     } else if (ast->type == AST_CONVERT_TO_INT) {
         generate_int_conversion(ctx, ast);
+    } else if (ast->type == AST_DEREFERENCE) {
+        generate_dereference(ctx, ast);
     } else {
         xcc_assert_not_reached_msg("unknown expression");
     }
@@ -587,7 +626,7 @@ static void generate_statement(GenContext *ctx, AST *ast) {
             AST *expression = ast->nodes[0];
             generate_expression(ctx, expression);
 
-            generate_move(expression->pos, value_pos_reg(REG_RAX, expression->pos->size));
+            generate_move(expression->pos, value_pos_reg(REG_RAX, expression->pos->size, expression->pos->is_signed));
         }
 
         // epilogue
@@ -646,7 +685,9 @@ static void generate_param_loading(AST *ast) {
         xcc_assert(param->declaration->pos);
 
         RegLoc arg_reg = argument_index_to_register(i - 1);
-        generate_move(value_pos_reg(arg_reg, param->declaration->pos->size), param->declaration->pos);
+        generate_move(value_pos_reg(
+            arg_reg, param->declaration->pos->size, param->declaration->pos->is_signed
+        ), param->declaration->pos);
     }
 }
 

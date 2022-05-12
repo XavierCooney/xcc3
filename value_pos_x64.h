@@ -32,6 +32,5 @@ typedef struct ValuePosition {
 
 void value_pos_allocate(AST *ast);
 bool value_pos_is_same(ValuePosition *a, ValuePosition *b);
-ValuePosition *value_pos_reg(RegLoc location, int reg_size);
-void value_pos_free_preallocated();
+ValuePosition *value_pos_reg(RegLoc location, int reg_size, bool is_signed);
 void value_pos_dump(ValuePosition *value_pos);

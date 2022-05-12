@@ -155,13 +155,24 @@ static AST *parse_unary_postfix(Parser *parser) {
     return a;
 }
 
+static AST *parse_unary_prefix(Parser *parser) {
+    if (accept(parser, TOK_STAR)) {
+        AST *ast = ast_new(AST_DEREFERENCE, prev_token(parser));
+        // todo: handle qualifiers here.
+        ast_append(ast, parse_unary_prefix(parser));
+        return ast;
+    } else {
+        return parse_unary_postfix(parser);
+    }
+}
+
 static AST *parse_multiplicative(Parser *parser) {
-    AST *a = parse_unary_postfix(parser);
+    AST *a = parse_unary_prefix(parser);
 
     while (accept(parser, TOK_STAR) || accept(parser, TOK_SLASH)) {
         Token *token = prev_token(parser);
 
-        AST *b = parse_unary_postfix(parser);
+        AST *b = parse_unary_prefix(parser);
 
         ASTType ast_type = token->type == TOK_STAR ? AST_MULTIPLY : AST_DIVIDE;
         AST *add_ast = ast_new(ast_type, token);
@@ -350,6 +361,9 @@ static AST *parse_declarator(Parser *parser) {
     if (accept(parser, TOK_OPEN_PAREN)) {
         declarator = parse_declarator(parser);
         expect(parser, TOK_CLOSE_PAREN);
+    } else if (accept(parser, TOK_STAR)) {
+        declarator = ast_new(AST_DECLARATOR_POINTER, prev_token(parser));
+        ast_append(declarator, parse_declarator(parser));
     } else if (accept(parser, TOK_IDENTIFIER)) {
         declarator = ast_new(AST_DECLARATOR_IDENT, prev_token(parser));
         declarator->identifier_string = declarator->main_token->contents;
@@ -366,9 +380,8 @@ static AST *parse_declarator(Parser *parser) {
         do {
             if (current_token(parser)->type == TOK_CLOSE_PAREN) {
                 // TODO: handle this case properly
-                // Really in this case we shouldn't provide a prototype. But
-                // I really don't know why you'd use this syntax in the
-                // modern age...
+                // We shouldn't provide a prototype here, but I really
+                // don't know why you'd use this syntax in the modern age...
 
                 // parse_error(parser, "empty param list doesn't provide a prototype");
 

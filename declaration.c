@@ -131,6 +131,10 @@ static void resolve_recursive(ResolutionList *res_list, AST *ast, AST *parent, A
 
     if (ast->type == AST_DECLARATOR_GROUP) {
         declarator_group = ast;
+
+        if (declaration_root->type == AST_PARAMETER && ast->num_nodes == 2) {
+            prog_error_ast("can't have an initialiser for parameter", ast);
+        }
     }
 
     int old_num_locals = res_list->num_local_declarations;

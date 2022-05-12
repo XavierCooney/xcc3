@@ -25,6 +25,8 @@ typedef enum {
 
     AST_CALL,
 
+    AST_DEREFERENCE,
+
     AST_IF, AST_WHILE, AST_BLOCK_STATEMENT
 } ASTType;
 

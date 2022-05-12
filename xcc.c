@@ -171,7 +171,6 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    value_pos_free_preallocated();
     type_free_all();
     resolve_free(res_list);
     ast_free(program_ast);

@@ -111,6 +111,8 @@ static bool is_type_complete(Type *type) {
         return true;
     } else if (type->type_type == TYPE_VOID) {
         return false;
+    } else if (type->type_type == TYPE_POINTER) {
+        return true;
     } else {
         xcc_assert_not_reached();
     }
@@ -658,6 +660,19 @@ static void handle_declarator_func(AST *ast) {
     type_propogate(ast->nodes[0]);
 }
 
+static void handle_declarator_pointer(AST *ast) {
+    xcc_assert(ast->type == AST_DECLARATOR_POINTER);
+    xcc_assert(ast->value_type);
+    xcc_assert(ast->num_nodes == 1);
+
+    Type *pointer_type = type_new();
+    pointer_type->type_type = TYPE_POINTER;
+    pointer_type->underlying = ast->value_type;
+
+    ast->nodes[0]->value_type = pointer_type;
+    type_propogate(ast->nodes[0]);
+}
+
 static void handle_call(AST *ast) {
     xcc_assert(ast->num_nodes >= 1);
 
@@ -700,6 +715,8 @@ void type_propogate(AST *ast) {
         handle_declarator_group(ast);
     } else if (ast->type == AST_DECLARATOR_FUNC) {
         handle_declarator_func(ast);
+    } else if (ast->type == AST_DECLARATOR_POINTER) {
+        handle_declarator_pointer(ast);
     } else if (ast->type == AST_CALL) {
         handle_call(ast);
     } else if (ast->type == AST_IDENT_USE) {
@@ -722,6 +739,16 @@ void type_propogate(AST *ast) {
         implicitly_convert(&ast->nodes[1], var_type);
 
         ast->value_type = var_type;
+    } else if (ast->type == AST_DEREFERENCE) {
+        xcc_assert(ast->num_nodes == 1);
+        AST *pointer = ast->nodes[0];
+        type_propogate(pointer);
+
+        if (pointer->value_type->type_type != TYPE_POINTER) {
+            prog_error_ast("cannot dereference non-pointer type", ast);
+        }
+
+        ast->value_type = pointer->value_type->underlying;
     } else if (ast->type == AST_INTEGER_LITERAL) {
         ast->value_type = type_new_int(TYPE_INT, false, false);
     } else if (ast->type == AST_RETURN_STMT) {
@@ -852,6 +879,10 @@ void type_dump(Type *type) {
         }
         fprintf(stderr, ") -> ");
         type_dump(type->underlying);
+    } else if (type->type_type == TYPE_POINTER) {
+        fprintf(stderr, "ptr<");
+        type_dump(type->underlying);
+        fprintf(stderr, ">");
     } else {
         xcc_assert_not_reached();
     }
